@@ -22,8 +22,15 @@ export function formatDateLong(isoStr){
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", weekday: "short" });
 }
 
+// Data (AAAA-MM-DD) no fuso do aparelho. toISOString() usa UTC e, no Brasil,
+// vira "amanhã" depois das 21h — por isso não serve para datas de calendário.
+export function dataISOLocal(d = new Date()){
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+
 export function todayISO(){
-  return new Date().toISOString().slice(0, 10);
+  return dataISOLocal();
 }
 
 export function avg(nums){

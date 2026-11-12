@@ -1,4 +1,4 @@
-import { $, $$, escapeHtml, toast, confirmAction, formatDate } from "../utils.js";
+import { $, $$, escapeHtml, toast, confirmAction, formatDate, dataISOLocal } from "../utils.js";
 import { emailNormalizado } from "../auth.js";
 import {
   TEAM, PRESETS_CORES, atualizarTime, lerEquipe, salvarEquipe, linkDoTime, sairDoTime,
@@ -24,10 +24,10 @@ export function renderConfiguracoes(root, state){
 
   const dias = diasRestantes();
   const textoPlano = !planoVigente()
-    ? `<strong style="color:var(--danger);">Vencido</strong> em ${formatDate(TEAM.validoAte.toISOString().slice(0, 10))} — o time fica só em consulta até renovar.`
+    ? `<strong style="color:var(--danger);">Vencido</strong> em ${formatDate(dataISOLocal(TEAM.validoAte))} — o time fica só em consulta até renovar.`
     : dias === null ? "Sem data de vencimento."
     : dias > 3000 ? "Sem data de vencimento."
-    : `Vale até ${formatDate(TEAM.validoAte.toISOString().slice(0, 10))} (${dias} dia${dias === 1 ? "" : "s"}).`;
+    : `Vale até ${formatDate(dataISOLocal(TEAM.validoAte))} (${dias} dia${dias === 1 ? "" : "s"}).`;
 
   root.innerHTML = `
     <div class="topbar">

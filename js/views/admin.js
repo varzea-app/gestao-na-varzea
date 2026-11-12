@@ -1,4 +1,4 @@
-import { $, $$, escapeHtml, toast, formatDate } from "../utils.js";
+import { $, $$, escapeHtml, toast, formatDate, dataISOLocal } from "../utils.js";
 import { listarTimes, atualizarPlanoDoTime, definirAutoCadastro, irParaTime } from "../tenant.js";
 import { plataformaAberta } from "../tenant.js";
 import { PLANOS, diasAte } from "../planos.js";
@@ -10,7 +10,7 @@ import { formCriarTimeHtml, ligarFormCriarTime } from "./landing.js";
 // ============================================================================
 
 const SEM_VENCIMENTO = new Date("2100-01-01T12:00:00");
-const isoData = (d) => d.toISOString().slice(0, 10);
+const isoData = (d) => dataISOLocal(d);
 
 function situacao(t){
   if (!t.validoAte) return { txt: "sem data", cls: "venc-ok" };

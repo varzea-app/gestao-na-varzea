@@ -1,6 +1,6 @@
 import { TEAM, hashtags, linkDoTime } from "../tenant.js";
 import { temRecurso } from "../planos.js";
-import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus } from "../utils.js";
+import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus, todayISO } from "../utils.js";
 import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo } from "../stats.js";
 import { listenPresencas } from "../db.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
@@ -129,7 +129,7 @@ export function renderDashboard(root, state){
     .filter(j => j.status !== "realizado")
     .sort((a, b) => (a.data || "").localeCompare(b.data || ""))
     .slice(0, 5);
-  const hojeISO = new Date().toISOString().slice(0, 10);
+  const hojeISO = todayISO();
   const proximo = proximosJogos.find(j => (j.data || "") >= hojeISO) || proximosJogos[0] || null;
 
   const nomeAdv = id => escapeHtml(state.adversarios.find(a => a.id === id)?.nome || "?");

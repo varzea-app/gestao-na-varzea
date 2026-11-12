@@ -1,6 +1,6 @@
 import { watchAuth, loginWithGoogle, logout, ehSuperAdmin } from "./auth.js";
 import { listenCollection, listenDoc } from "./db.js";
-import { $, $$, toast, getTheme, toggleTheme, escapeHtml, formatDate } from "./utils.js";
+import { $, $$, toast, getTheme, toggleTheme, escapeHtml, formatDate, dataISOLocal } from "./utils.js";
 import { TEAM, resolverTeamId, carregarTime, aplicarMarca, observarTime, usuarioEhDaEquipe } from "./tenant.js";
 import { PLANOS, RECURSO_DA_ROTA, NOMES_RECURSOS, temRecurso, planoMinimo, planoVigente, diasRestantes } from "./planos.js";
 import { CONTATO_WHATSAPP } from "./firebase-config.js";
@@ -157,8 +157,11 @@ const somenteLeitura = () => modo === "time" && state.isAuthorized && !state.ehS
 // Faixa no topo para a equipe: teste acabando, plano perto de vencer ou vencido.
 function faixaDoPlano(){
   if (!state.isAuthorized) return "";
-  const dataFim = TEAM.validoAte ? formatDate(TEAM.validoAte.toISOString().slice(0, 10)) : "";
+  const dataFim = TEAM.validoAte ? formatDate(dataISOLocal(TEAM.validoAte)) : "";
   if (!planoVigente()){
+    if (state.ehSuper){
+      return `<div class="plano-faixa plano-faixa-erro">Plano vencido${dataFim ? " em " + dataFim : ""}. Para a equipe do time, o cadastro está bloqueado. Você, como dono da plataforma, continua podendo editar.</div>`;
+    }
     return `<div class="plano-faixa plano-faixa-erro">Plano vencido${dataFim ? " em " + dataFim : ""}. O time está só em consulta: renove para voltar a cadastrar.${WHATS_RENOVAR(`Olá! Quero renovar o plano do time ${TEAM.nome}.`)}</div>`;
   }
   const d = diasRestantes();
