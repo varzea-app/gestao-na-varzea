@@ -126,8 +126,24 @@ function startListeners(){
   listenCollection("campos", "nome", (items, err) => receber("campos", "campos", err, () => { state.campos = items; }));
   listenCollection("atletas", "nome", (items, err) => receber("atletas", "atletas", err, () => { state.atletas = items; }));
   listenCollection("jogos", "data", (items, err) => receber("jogos", "jogos", err, () => { state.jogos = items; }));
-  listenCollection("financeiro", "data", (items, err) => receber("financeiro", "financeiro", err, () => { state.financeiro = items; }));
-  listenDoc("configuracoes", "geral", (item, err) => receber("configuracoes", "configFinanceiro", err, () => { state.configFinanceiro = item; }));
+  // Financeiro e configurações só a equipe pode ler (regras do Firestore).
+  // Visitante nem tenta: senão levaria "permissão negada" e veria o aviso de falha.
+  if (state.isAuthorized) iniciarFinanceiro();
+  else { state.loaded.financeiro = true; state.loaded.configFinanceiro = true; }
+}
+
+let paraEscutaFinanceiro = [];
+function pararFinanceiro(){
+  paraEscutaFinanceiro.forEach(f => { try{ f(); }catch(err){ /* ok */ } });
+  paraEscutaFinanceiro = [];
+  falhasLeitura.delete("financeiro"); falhasLeitura.delete("configuracoes");
+}
+function iniciarFinanceiro(){
+  pararFinanceiro();
+  paraEscutaFinanceiro.push(
+    listenCollection("financeiro", "data", (items, err) => receber("financeiro", "financeiro", err, () => { state.financeiro = items; })),
+    listenDoc("configuracoes", "geral", (item, err) => receber("configuracoes", "configFinanceiro", err, () => { state.configFinanceiro = item; })),
+  );
 }
 
 // Modo leve da tela de presença: lê os atletas (a lista de nomes), o jogo do
@@ -168,6 +184,7 @@ function promoverParaCompleto(){
   if (completo) return;
   paraEscutaLeve.forEach(f => { try{ f(); }catch(err){ /* ok */ } });
   paraEscutaLeve = [];
+  pararFinanceiro();
   falhasLeitura.clear();
   completo = true;
   state.adversarios = []; state.campos = []; state.atletas = []; state.jogos = []; state.financeiro = []; state.configFinanceiro = null;
@@ -513,6 +530,10 @@ async function iniciar(){
     state.usuario = user || null;
     state.ehSuper = !!user && ehSuperAdmin(user.email);
     state.isAuthorized = modo === "time" ? membro : false;
+    if (completo){
+      if (state.isAuthorized) iniciarFinanceiro();
+      else { pararFinanceiro(); state.financeiro = []; state.configFinanceiro = null; state.loaded.financeiro = true; state.loaded.configFinanceiro = true; }
+    }
     authPronto = true;
     updateAuthUI(user);
     render();
