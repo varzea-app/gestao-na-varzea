@@ -227,7 +227,7 @@ function msgFimJogo(c){
 const urlWhats = (texto) => `https://wa.me/?text=${encodeURIComponent(texto)}`;
 
 // ----------------------------------------------------------------------------
-// Proteção: o Modo jogo só abre jogo AGENDADO — ou o jogo de hoje, que já vira
+// Proteção: o Modo jogo só abre o jogo de HOJE ou jogo AGENDADO para o futuro. O de hoje já vira
 // "realizado" no primeiro lançamento mas continua em andamento. Assim um jogo
 // antigo já fechado não é alterado por engano.
 // ----------------------------------------------------------------------------
@@ -237,18 +237,19 @@ const urlWhats = (texto) => `https://wa.me/?text=${encodeURIComponent(texto)}`;
 const DOZE_HORAS = 12 * 3600 * 1000;
 export function modoJogoLiberado(jogo){
   if (!jogo) return false;
-  if (jogo.status !== "realizado" || jogo.data === todayISO()) return true;
+  const hoje = todayISO();
+  if (jogo.data === hoje) return true;                                  // dia do jogo
+  if (jogo.status !== "realizado" && (jogo.data || "") > hoje) return true; // agendado para o futuro (antes do dia)
   return typeof jogo.modoJogoEm === "number" && Date.now() - jogo.modoJogoEm < DOZE_HORAS;
 }
 
-// Jogo que o atalho do menu abre: o de hoje; senão o próximo agendado; senão o
-// agendado mais recente (data passada que ficou sem atualizar). Nenhum = null.
+// Jogo que o atalho do menu abre: o de hoje; senão o próximo agendado.
+// Nenhum = null (a tela avisa que não há jogo agendado).
 export function jogoParaModoJogo(jogos){
   const hoje = todayISO();
   const ok = jogos.filter(j => j.data && modoJogoLiberado(j));
   return ok.find(j => j.data === hoje)
     || ok.filter(j => j.data > hoje).sort((a, b) => a.data.localeCompare(b.data))[0]
-    || [...ok].sort((a, b) => b.data.localeCompare(a.data))[0]
     || null;
 }
 
@@ -285,7 +286,7 @@ export function renderModoJogo(root, state, jogoId){
       <div class="card card-pad" style="max-width:480px; margin:24px auto; text-align:center;">
         <div style="font-size:34px;">🔒</div>
         <div class="card-title" style="margin-top:6px;">Este jogo já foi realizado</div>
-        <p style="font-size:13.5px; color:var(--ink-soft);">O Modo jogo só abre jogos agendados (ou o jogo de hoje), para não alterar por engano o resultado de um jogo antigo. Para corrigir este jogo, use a página dele.</p>
+        <p style="font-size:13.5px; color:var(--ink-soft);">O Modo jogo só abre o jogo do dia ou jogos agendados para os próximos dias, para não alterar por engano o resultado de um jogo antigo. Para corrigir este jogo, use a página dele.</p>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
           <a href="#jogos/${jogo.id}" class="btn btn-primary">Abrir o jogo</a>
           <a href="#jogos" class="btn btn-ghost">Partidas</a>
