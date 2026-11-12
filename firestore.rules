@@ -1,0 +1,183 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------
+    // Donos da plataforma. Troque pelo(s) seu(s) e-mail(s) e mantenha IGUAL
+    // ao SUPER_ADMINS de js/firebase-config.js (sempre em minúsculas).
+    // ------------------------------------------------------------------
+    function supers() {
+      return ['lucas.rf.nascimento@gmail.com'];
+    }
+
+    function logado() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+    function emailAtual() {
+      return request.auth.token.email.lower();
+    }
+    function isSuper() {
+      return logado() && emailAtual() in supers();
+    }
+
+    function caminhoTime(t) {
+      return /databases/$(database)/documents/times/$(t);
+    }
+    function dadosTime(t) {
+      return get(caminhoTime(t)).data;
+    }
+    function equipeExiste(t) {
+      return exists(/databases/$(database)/documents/times/$(t)/privado/equipe);
+    }
+    function emailsDaEquipe(t) {
+      return get(/databases/$(database)/documents/times/$(t)/privado/equipe).data.emails;
+    }
+
+    // Faz parte da equipe do time (ou é dono da plataforma).
+    function isMembro(t) {
+      return logado() && (isSuper() || (equipeExiste(t) && emailAtual() in emailsDaEquipe(t)));
+    }
+    // Plano dentro da validade.
+    function ativo(t) {
+      return dadosTime(t).validoAte > request.time;
+    }
+    // Pode gravar dados do time: dono da plataforma, ou equipe com plano vigente.
+    function podeEscrever(t) {
+      return isSuper() || (isMembro(t) && ativo(t));
+    }
+    function planoPro(t) {
+      return dadosTime(t).plano in ['pro', 'craque', 'teste'];
+    }
+    function planoCraque(t) {
+      return dadosTime(t).plano in ['craque', 'teste'];
+    }
+
+    function corValida(c) {
+      return c is string && c.matches('^#[0-9a-fA-F]{6}$');
+    }
+
+    // ------------------------------------------------------------------
+    // Plataforma (ex.: plataforma/config { autoCadastro: true }).
+    // ------------------------------------------------------------------
+    match /plataforma/{doc} {
+      allow read: if true;
+      allow write: if isSuper();
+    }
+
+    // Lista de times de cada e-mail ("Seus times" na tela inicial).
+    match /acessos/{email} {
+      allow read, write: if logado() && emailAtual() == email;
+    }
+
+    // ------------------------------------------------------------------
+    // Times
+    // ------------------------------------------------------------------
+    match /times/{t} {
+      // Ler um time (nome, escudo, cores, plano) é público: é o que monta o
+      // app para quem abre o link. Listar todos os times é só do dono.
+      allow get: if true;
+      allow list: if isSuper();
+
+      // Criar: dono da plataforma (qualquer plano), ou — se o auto-cadastro
+      // estiver aberto — qualquer conta Google, só com teste de até 31 dias.
+      allow create: if isSuper()
+        || (logado()
+            && t.matches('^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$')
+            && get(/databases/$(database)/documents/plataforma/config).data.autoCadastro == true
+            && request.resource.data.donoEmail == emailAtual()
+            && request.resource.data.plano == 'teste'
+            && request.resource.data.validoAte <= request.time + duration.value(31, 'd')
+            && request.resource.data.keys().hasOnly(
+                 ['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque', 'plano', 'validoAte', 'donoEmail', 'criadoEm'])
+            && request.resource.data.nome is string
+            && request.resource.data.nome.size() > 0
+            && request.resource.data.nome.size() <= 40);
+
+      // Editar: o dono da plataforma muda tudo (plano, validade). A equipe só
+      // muda a identidade visual — nunca o plano nem a validade.
+      allow update: if isSuper()
+        || (isMembro(t)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque'])
+            && request.resource.data.nome is string
+            && request.resource.data.nome.size() > 0
+            && request.resource.data.nome.size() <= 40
+            && request.resource.data.sigla is string
+            && request.resource.data.sigla.size() <= 3
+            && request.resource.data.escudo is string
+            && request.resource.data.escudo.size() <= 150000
+            && corValida(request.resource.data.corPrimaria)
+            && corValida(request.resource.data.corDestaque));
+
+      allow delete: if isSuper();
+
+      // Equipe: e-mails que podem editar o time. Só a equipe lê.
+      match /privado/{doc} {
+        allow read: if isMembro(t);
+        // Primeira gravação (ao criar o time): só o dono registrado no time.
+        allow create: if isSuper()
+          || (logado()
+              && doc == 'equipe'
+              && !equipeExiste(t)
+              && dadosTime(t).donoEmail == emailAtual()
+              && request.resource.data.emails == [emailAtual()]);
+        allow update, delete: if doc == 'equipe'
+          && isMembro(t)
+          && (isSuper() || ativo(t))
+          && request.resource.data.keys().hasOnly(['emails'])
+          && request.resource.data.emails.size() <= 20;
+      }
+
+      // Dados do time com leitura pública (alimentam Dashboard, Ranking,
+      // Histórico... sem exigir login). Escrita só da equipe, com plano vigente.
+      match /adversarios/{id} {
+        allow read: if true;
+        allow write: if podeEscrever(t);
+      }
+      match /campos/{id} {
+        allow read: if true;
+        allow write: if podeEscrever(t);
+      }
+      match /atletas/{id} {
+        allow read: if true;
+        allow write: if podeEscrever(t);
+      }
+      match /jogos/{id} {
+        allow read: if true;
+        allow write: if podeEscrever(t);
+      }
+
+      // CPF e nascimento: nunca públicos.
+      match /atletas_privado/{id} {
+        allow read: if isMembro(t);
+        allow write: if podeEscrever(t);
+      }
+
+      // Financeiro e configuração (mensalidade, Pix): só a equipe lê; só grava
+      // com plano Craque (ou teste). Dono da plataforma sempre pode.
+      match /financeiro/{id} {
+        allow read: if isMembro(t);
+        allow write: if podeEscrever(t) && (isSuper() || planoCraque(t));
+      }
+      match /configuracoes/{id} {
+        allow read: if isMembro(t);
+        allow write: if podeEscrever(t) && (isSuper() || planoCraque(t));
+      }
+
+      // Confirmação de presença: pública de propósito (o jogador não faz
+      // login). Exige plano Pro ou superior vigente, os 4 campos esperados,
+      // uma resposta válida e o id no formato jogoId_atletaId.
+      match /presencas/{id} {
+        allow read: if true;
+        allow create, update: if ativo(t)
+          && planoPro(t)
+          && request.resource.data.keys().hasOnly(['jogoId', 'atletaId', 'resposta', 'atualizadoEm'])
+          && request.resource.data.resposta in ['vou', 'talvez', 'nao']
+          && id == request.resource.data.jogoId + '_' + request.resource.data.atletaId;
+        allow delete: if podeEscrever(t);
+      }
+    }
+  }
+}

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gestão de Time</title>
+<script>
+  // Aplica o tema salvo (claro/escuro) antes da 1ª renderização, pra não
+  // piscar o tema errado por uma fração de segundo ao carregar a página.
+  (function(){
+    try{
+      if (localStorage.getItem("app_theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    }catch(err){ /* localStorage indisponível — fica no tema claro (padrão) */ }
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23E4B62B%22/><text x=%2250%22 y=%2266%22 font-size=%2250%22 text-anchor=%22middle%22 font-family=%22Georgia%22>⚽</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1C1C1C">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gestão de Time">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+</head>
+<body>
+
+<!-- App shell (visão geral é pública; jogos/atletas/adversários/campos exigem login) -->
+<div id="app-shell">
+  <header class="mobile-topbar">
+    <div class="mobile-topbar-brand">
+      <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="">
+      <span></span>
+    </div>
+    <div class="mobile-topbar-auth">
+      <button id="btn-theme-mobile" class="btn-icon-share" type="button" aria-label="Alternar tema claro/escuro" title="Alternar tema"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      <button id="btn-login-mobile" class="btn btn-gold btn-sm">Entrar</button>
+      <div class="user-chip-mini" id="user-chip-mobile" style="display:none;">
+        <img id="user-avatar-mobile" src="" alt="">
+        <button id="btn-signout-mobile" class="btn-signout">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="sidebar">
+    <div class="brand">
+      <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="" class="brand-crest-img">
+      <div>
+        <div class="brand-name"></div>
+        <div class="brand-sub">Gestão do time</div>
+      </div>
+    </div>
+
+    <div class="nav-group-label">Visão geral</div>
+    <button class="nav-link" data-route="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="8"/><rect x="10" y="8" width="4" height="12"/><rect x="17" y="4" width="4" height="16"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-link" data-route="relatorios">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/></svg>
+      Relatórios
+    </button>
+
+    <div class="nav-group-label nav-protected-only" style="display:none;">Gestão</div>
+    <button class="nav-link nav-protected-only" style="display:none;" data-route="avaliacao" data-recurso="avaliacao">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6z"/></svg>
+      Avaliação
+    </button>
+    <button class="nav-link nav-protected-only" style="display:none;" data-route="cadastros">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Cadastros
+    </button>
+    <button class="nav-link nav-protected-only" style="display:none;" data-route="financeiro" data-recurso="financeiro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1.4 1.2-2.5 2.7-2.5s2.6.9 2.6 2.1c0 1.6-1.4 2-2.7 2.4-1.4.4-2.6.9-2.6 2.4 0 1.2 1.1 2.1 2.6 2.1s2.7-1 2.7-2.4"/></svg>
+      Financeiro
+    </button>
+
+    <button class="nav-link nav-protected-only" style="display:none;" data-route="configuracoes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Configurações
+    </button>
+    <button class="nav-link nav-super-only" style="display:none;" data-route="admin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7z"/></svg>
+      Painel do dono
+    </button>
+
+    <div class="sidebar-footer">
+      <button id="btn-theme-side" class="btn btn-ghost btn-sm btn-login-side" type="button" aria-label="Alternar tema claro/escuro" style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:8px;"></button>
+      <button id="btn-login-desktop" class="btn btn-gold btn-sm btn-login-side">Entrar com Google</button>
+      <div class="user-chip" id="user-chip-desktop" style="display:none;">
+        <img id="user-avatar" src="" alt="">
+        <div style="overflow:hidden;">
+          <div id="user-name" class="user-chip-name"></div>
+          <div id="user-email" class="user-chip-mail"></div>
+        </div>
+      </div>
+      <button id="btn-signout" class="btn-signout" style="display:none;">Sair</button>
+    </div>
+  </nav>
+
+  <main id="view-root">
+    <div class="loader">Carregando…</div>
+  </main>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root" class="toast-wrap"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script type="module" src="js/app.js?v=20261112"></script>
+</body>
+</html>

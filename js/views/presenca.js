@@ -1,0 +1,164 @@
+import { TEAM, hashtags, linkDoTime } from "../tenant.js";
+import { $, $$, escapeHtml, toast, formatDateLong } from "../utils.js";
+import { listenPresencas, setPresenca } from "../db.js";
+import { ehJogador } from "../stats.js";
+
+// Confirmação de presença — tela pública (sem login). O jogador abre o link
+// do jogo, acha o próprio nome e toca em Vou / Talvez / Não vou.
+
+const RESPOSTAS = [
+  { key: "vou", label: "Vou", icon: "✅" },
+  { key: "talvez", label: "Talvez", icon: "🤔" },
+  { key: "nao", label: "Não vou", icon: "❌" },
+];
+
+let unsub = null;
+let jogoAtual = null;
+let presencas = [];
+let erroLeitura = false;
+
+function pararEscuta(){
+  if (unsub){ unsub(); unsub = null; }
+  jogoAtual = null; presencas = []; erroLeitura = false;
+}
+
+export function linkPresenca(jogoId){
+  return linkDoTime(`#presenca/${jogoId}`);
+}
+
+export function renderPresenca(root, state, jogoId){
+  const jogo = state.jogos.find(j => j.id === jogoId);
+  if (!jogo){
+    pararEscuta();
+    root.innerHTML = `<div class="empty-state"><h3>Jogo não encontrado</h3><p>O link pode estar incorreto ou o jogo foi excluído.</p></div>`;
+    return;
+  }
+
+  if (jogoAtual !== jogoId){
+    pararEscuta();
+    jogoAtual = jogoId;
+    unsub = listenPresencas(jogoId, (items, err) => {
+      presencas = items; erroLeitura = !!err;
+      // Só redesenha se o usuário ainda está nessa tela; senão, para de ouvir.
+      if (location.hash.startsWith(`#presenca/${jogoId}`)) desenhar(root, state, jogoId);
+      else pararEscuta();
+    });
+  }
+  desenhar(root, state, jogoId);
+}
+
+function desenhar(root, state, jogoId){
+  const jogo = state.jogos.find(j => j.id === jogoId);
+  if (!jogo) return;
+  const adv = state.adversarios.find(a => a.id === jogo.adversarioId)?.nome || "?";
+  const campo = state.campos.find(c => c.id === jogo.campoId)?.nome || "";
+  const aberto = jogo.status === "agendado";
+
+  const jogadores = state.atletas.filter(a => ehJogador(a) && a.ativo !== false)
+    .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+  const respostaDe = new Map(presencas.map(p => [p.atletaId, p.resposta]));
+
+  const quandoDe = new Map(presencas.map(p => [p.atletaId, p.atualizadoEm]));
+  const quando = (id) => {
+    const t = quandoDe.get(id);
+    const d = t && typeof t.toDate === "function" ? t.toDate() : null;
+    if (!d) return "";
+    const dia = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+    return `Respondeu em ${dia} às ${hora}`;
+  };
+
+  const cont = { vou: 0, talvez: 0, nao: 0, sem: 0 };
+  jogadores.forEach(a => { const r = respostaDe.get(a.id); if (cont[r] !== undefined) cont[r]++; else cont.sem++; });
+
+  // Ordem de resposta: o primeiro a responder aparece primeiro, o último por último
+  // (resposta ainda sem horário do servidor vai pro fim).
+  const ms = (id) => { const t = quandoDe.get(id); return t && typeof t.toMillis === "function" ? t.toMillis() : Infinity; };
+  const nomesDe = (resp) => jogadores.filter(a => respostaDe.get(a.id) === resp)
+    .sort((a, b) => (ms(a.id) > ms(b.id)) - (ms(a.id) < ms(b.id))).map(a => escapeHtml(a.nome)).join(", ");
+
+  const linhas = jogadores.map(a => {
+    const atual = respostaDe.get(a.id);
+    const botoes = RESPOSTAS.map(r => `
+      <button class="btn btn-sm ${atual === r.key ? "btn-primary" : "btn-ghost"}" data-atleta="${a.id}" data-resp="${r.key}" ${aberto ? "" : "disabled"}>${r.icon} ${r.label}</button>`).join("");
+    return `
+      <div class="card card-pad" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div>
+          <strong>${escapeHtml(a.nome)}</strong>
+          ${quando(a.id) ? `<div style="font-size:11.5px; color:var(--ink-faint);">${quando(a.id)}</div>` : ""}
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">${botoes}</div>
+      </div>`;
+  }).join("");
+
+  const chip = (label, n) => `<div class="kpi-tile"><div class="kpi-label">${label}</div><div class="kpi-value">${n}</div></div>`;
+
+  root.innerHTML = `
+    <a href="#dashboard" title="Abrir o app do ${TEAM.nomeHtml}" style="display:inline-flex; align-items:center; gap:10px; text-decoration:none; color:inherit; margin-bottom:14px;">
+      <img src="${TEAM.escudo}" alt="${TEAM.nomeHtml}" style="width:46px; height:46px; border-radius:50%; object-fit:cover;">
+      <span style="font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:.04em;">${TEAM.nomeUpperHtml}</span>
+    </a>
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">Confirmação de presença</div>
+        <h1>${TEAM.nomeHtml} vs ${escapeHtml(adv)}</h1>
+        <div style="font-size:13px; color:var(--ink-soft); margin-top:4px;">🗓️ ${formatDateLong(jogo.data)}${jogo.horario ? ` · ⏰ ${escapeHtml(jogo.horario)}` : ""}${campo ? ` · 📍 ${escapeHtml(campo)}` : ""}${jogo.tipoPartida ? ` · 🏷️ ${escapeHtml(jogo.tipoPartida)}` : ""}</div>
+      </div>
+    </div>
+
+    ${erroLeitura ? `<div class="card card-pad" style="margin-bottom:12px;">Não foi possível carregar as confirmações agora. Tente novamente mais tarde.</div>` : ""}
+    ${aberto ? `<p style="font-size:13px; color:var(--ink-soft); margin:0 0 12px;">Ache seu nome e toque em uma opção. Você pode mudar de ideia quando quiser.</p>`
+      : `<p style="font-size:13px; color:var(--ink-soft); margin:0 0 12px;">Esse jogo já foi realizado — as confirmações estão fechadas.</p>`}
+
+    <div class="kpi-grid">${chip("Vou", cont.vou)}${chip("Talvez", cont.talvez)}${chip("Não vou", cont.nao)}${chip("Sem resposta", cont.sem)}</div>
+
+    ${cont.vou ? `<p style="font-size:13px; margin:0 0 6px;"><strong>✅ Vão:</strong> ${nomesDe("vou")}</p>` : ""}
+    ${cont.talvez ? `<p style="font-size:13px; margin:0 0 6px;"><strong>🤔 Talvez:</strong> ${nomesDe("talvez")}</p>` : ""}
+    ${cont.nao ? `<p style="font-size:13px; margin:0 0 6px;"><strong>❌ Não vão:</strong> ${nomesDe("nao")}</p>` : ""}
+
+    ${state.isAuthorized ? `
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin:14px 0;">
+        <button class="btn btn-ghost btn-sm" id="btn-copiar-convite">Copiar convite (WhatsApp)</button>
+        <button class="btn btn-ghost btn-sm" id="btn-copiar-pendentes">Copiar lista de quem não respondeu</button>
+      </div>` : ""}
+
+    <h2 style="font-size:18px; margin:14px 0 10px;">Jogadores</h2>
+    ${linhas || `<p style="color:var(--ink-faint); font-style:italic;">Nenhum jogador ativo cadastrado.</p>`}
+  `;
+
+  $$("button[data-resp]", root).forEach(btn => btn.addEventListener("click", async () => {
+    const atletaId = btn.dataset.atleta;
+    const nome = jogadores.find(a => a.id === atletaId)?.nome || "";
+    btn.disabled = true;
+    try{
+      await setPresenca(jogoId, atletaId, btn.dataset.resp);
+      toast(`${nome}: ${RESPOSTAS.find(r => r.key === btn.dataset.resp).label}`, "ok");
+    }catch(err){
+      console.error(err);
+      toast("Não foi possível salvar sua resposta. Tente de novo.", "err");
+      btn.disabled = false;
+    }
+  }));
+
+  const copiar = async (texto, msg) => {
+    try{ await navigator.clipboard.writeText(texto); toast(msg, "ok"); }
+    catch(e){ toast("Não foi possível copiar.", "err"); }
+  };
+  // Dados da partida, no mesmo padrão das duas mensagens (convite e cobrança).
+  const dadosPartida = () => {
+    const dados = [`🆚 ${TEAM.nome} x ${adv}`, `📅 ${formatDateLong(jogo.data)}`];
+    if (jogo.horario) dados.push(`⏰ ${jogo.horario}`);
+    if (campo) dados.push(`📍 ${campo}`);
+    if (jogo.tipoPartida) dados.push(`🏷️ ${jogo.tipoPartida}`);
+    return dados.join("\n");
+  };
+  $("#btn-copiar-convite", root)?.addEventListener("click", () => copiar(
+    `⚽ Bora confirmar presença!\n\n${dadosPartida()}\n\n👉 Confirme pelo link:\n${linkPresenca(jogoId)}`,
+    "Convite copiado."));
+  $("#btn-copiar-pendentes", root)?.addEventListener("click", () => {
+    const pend = jogadores.filter(a => !respostaDe.has(a.id)).map(a => `• ${a.nome}`);
+    copiar(pend.length
+      ? `⏳ Falta confirmar presença!\n\n${dadosPartida()}\n\nAinda não responderam:\n${pend.join("\n")}\n\n👉 Confirme pelo link:\n${linkPresenca(jogoId)}`
+      : "Todo mundo já respondeu! ✅", "Lista copiada.");
+  });
+}
