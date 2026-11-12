@@ -6,11 +6,25 @@ import {
 } from "../tenant.js";
 import { PLANOS, planoVigente, diasRestantes } from "../planos.js";
 import { popularDemonstracao, limparDadosDoTime } from "../demo.js";
+import { COLECOES_BACKUP, NOMES_COLECOES, gerarBackup, baixarJson, lerArquivoBackup, importarBackup } from "../backup.js";
 
 // ============================================================================
 // Configurações do time — nome, sigla, escudo, cores, equipe e link.
 // Quem edita: equipe do time (e o dono da plataforma).
 // ============================================================================
+
+// Resultado da última importação. A tela é redesenhada sozinha enquanto os dados
+// chegam, então o resumo fica guardado aqui para não sumir.
+let ultimaImportacao = null;
+
+function resumoDaImportacao(r){
+  const linhas = COLECOES_BACKUP.filter(n => n in r.arquivo).map(n => {
+    const ok = r.agora[n] === r.arquivo[n];
+    return `<tr><td>${escapeHtml(NOMES_COLECOES[n])}</td><td style="text-align:right;">${r.arquivo[n]}</td><td style="text-align:right;">${r.agora[n] ?? "erro"}</td><td>${ok ? "ok" : "confira"}</td></tr>`;
+  }).join("");
+  return `<div class="card-sub" style="margin-bottom:6px;"><strong>Importação concluída:</strong> ${r.n} registros gravados. Compare as contagens:</div>
+    <div class="table-wrap"><table><thead><tr><th>Coleção</th><th style="text-align:right;">No arquivo</th><th style="text-align:right;">Neste time agora</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+}
 
 export function renderConfiguracoes(root, state){
   const user = state.usuario;
@@ -94,6 +108,21 @@ export function renderConfiguracoes(root, state){
       ${ehSuper ? `<a class="btn btn-ghost btn-sm" href="#admin">Mudar plano no painel do dono</a>` : ""}
     </div>
 
+
+    <div class="card card-pad">
+      <div class="card-title">Backup dos dados</div>
+      <div class="card-sub">Baixa um arquivo com todos os dados do time (atletas, jogos, financeiro, presenças). Guarde em lugar seguro: ele contém dados pessoais.</div>
+      <div class="form-actions" style="justify-content:flex-start;"><button class="btn btn-ghost" id="cfg-backup">Baixar backup</button></div>
+    </div>
+
+    ${ehSuper ? `
+    <div class="card card-pad">
+      <div class="card-title">Importar backup (só o dono da plataforma vê)</div>
+      <div class="card-sub">Traz para este time os dados de um arquivo de backup, por exemplo o do app antigo do Bom D' Copus. Os registros mantêm o mesmo código: importar o mesmo arquivo de novo só atualiza, não duplica.</div>
+      <div class="field"><label>Arquivo de backup (.json)</label><input type="file" id="cfg-arquivo-backup" accept=".json,application/json"></div>
+      <div id="cfg-backup-previa" style="margin-top:12px;"></div>
+    </div>` : ""}
+
     ${ehSuper ? `
     <div class="card card-pad">
       <div class="card-title">Demonstração (só o dono da plataforma vê)</div>
@@ -106,6 +135,11 @@ export function renderConfiguracoes(root, state){
 
     <div class="form-actions" style="justify-content:flex-start;"><button class="btn btn-ghost btn-sm" id="cfg-sair-time">Trocar de time</button></div>
   `;
+
+  if (ultimaImportacao && ultimaImportacao.timeId === TEAM.id){
+    const alvo = $("#cfg-backup-previa", root);
+    if (alvo) alvo.innerHTML = resumoDaImportacao(ultimaImportacao);
+  }
 
   // ---------------- Prévia ao vivo ----------------
   function desenharPrevia(){
@@ -185,6 +219,54 @@ export function renderConfiguracoes(root, state){
     catch(err){ $("#cfg-link", root).select(); toast("Selecione e copie o link.", "ok"); }
   });
   $("#cfg-sair-time", root).addEventListener("click", sairDoTime);
+
+
+  // ---------------- Backup ----------------
+  $("#cfg-backup", root).addEventListener("click", async (e) => {
+    e.target.disabled = true; e.target.textContent = "Gerando…";
+    const { backup, falhas } = await gerarBackup();
+    if (falhas.length) toast("Não consegui ler: " + falhas.map(f => NOMES_COLECOES[f]).join(", "), "err");
+    else { baixarJson(backup, `backup-${TEAM.id}-${dataISOLocal()}.json`); toast("Backup baixado.", "ok"); }
+    e.target.disabled = false; e.target.textContent = "Baixar backup";
+  });
+
+  $("#cfg-arquivo-backup", root)?.addEventListener("change", async (e) => {
+    const previa = $("#cfg-backup-previa", root);
+    const arquivo = e.target.files[0];
+    if (!arquivo){ previa.innerHTML = ""; return; }
+    let lido;
+    try{ lido = await lerArquivoBackup(arquivo); }
+    catch(err){ previa.innerHTML = `<div class="landing-aviso" style="margin:0;">${escapeHtml(err.message)}</div>`; return; }
+    const linhas = COLECOES_BACKUP.filter(n => n in lido.contagens).map(n =>
+      `<tr><td>${escapeHtml(NOMES_COLECOES[n])}</td><td style="text-align:right;">${lido.contagens[n]}</td><td style="text-align:right;" data-agora="${n}">—</td></tr>`).join("");
+    previa.innerHTML = `
+      <div class="card-sub" style="margin-bottom:6px;">Origem: ${escapeHtml(lido.dados.origem || "?")} · gerado em ${escapeHtml(String(lido.dados.geradoEm || "?").slice(0, 10))}</div>
+      <div class="table-wrap"><table><thead><tr><th>Coleção</th><th style="text-align:right;">No arquivo</th><th style="text-align:right;">Neste time agora</th></tr></thead><tbody>${linhas}</tbody></table></div>
+      <div class="form-actions" style="justify-content:flex-start;"><button class="btn btn-primary" id="cfg-importar">Importar para este time</button></div>`;
+    const atualizarAgora = async () => {
+      const { contagens } = await gerarBackup();
+      $$("[data-agora]", previa).forEach(td => { td.textContent = contagens[td.dataset.agora] ?? "erro"; });
+    };
+    atualizarAgora();
+    $("#cfg-importar", previa).addEventListener("click", async (ev) => {
+      if (state.atletas.length || state.jogos.length){
+        if (!(await confirmAction("Este time já tem dados. Os registros do arquivo vão ser gravados por cima dos que têm o mesmo código e somados aos demais. Continuar?"))) return;
+      }
+      ev.target.disabled = true; ev.target.textContent = "Importando…";
+      try{
+        const n = await importarBackup(lido.dados);
+        toast(`Importação concluída: ${n} registros.`, "ok");
+        const { contagens: agora } = await gerarBackup();
+        ultimaImportacao = { timeId: TEAM.id, n, arquivo: lido.contagens, agora };
+        const alvo = $("#cfg-backup-previa", root);
+        if (alvo) alvo.innerHTML = resumoDaImportacao(ultimaImportacao);
+      }catch(err){
+        console.error(err);
+        toast("Erro na importação: " + err.message, "err");
+      }
+      if (ev.target.isConnected){ ev.target.disabled = false; ev.target.textContent = "Importar para este time"; }
+    });
+  });
 
   // ---------------- Demonstração (dono) ----------------
   $("#cfg-demo", root)?.addEventListener("click", async (e) => {
