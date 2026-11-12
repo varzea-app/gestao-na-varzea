@@ -10,6 +10,7 @@ import { renderRanking } from "./views/ranking.js";
 import { renderEscalacaoIdeal } from "./views/escalacao-ideal.js";
 import { renderHistorico } from "./views/historico.js";
 import { renderJogosList, renderJogoDetail } from "./views/jogos.js";
+import { renderImportar } from "./views/importar.js";
 import { renderModoJogo, renderSemJogoAgendado, jogoParaModoJogo } from "./views/modo-jogo.js";
 import { renderAtletas, renderAdversarios, renderCampos, renderCadastrosHub } from "./views/cadastros.js";
 import { renderAvaliacao } from "./views/avaliacao.js";
@@ -65,7 +66,7 @@ const ROUTES = {
   configuracoes: renderConfiguracoes,
 };
 
-const PROTECTED_ROUTES = new Set(["jogos", "modojogo", "atletas", "adversarios", "campos", "avaliacao", "cadastros", "financeiro", "configuracoes"]);
+const PROTECTED_ROUTES = new Set(["jogos", "modojogo", "importar", "atletas", "adversarios", "campos", "avaliacao", "cadastros", "financeiro", "configuracoes"]);
 
 // ----------------------------------------------------------------------------
 // Cache local (localStorage), uma chave por time — mostra a última versão
@@ -259,7 +260,7 @@ function parseHash(){
 
 function atualizarMenu(route){
   // Hubs: o botão do menu fica ativo em qualquer subtela do hub.
-  const CADASTROS_SUBROTAS = new Set(["atletas", "adversarios", "campos", "jogos"]);
+  const CADASTROS_SUBROTAS = new Set(["atletas", "adversarios", "campos", "jogos", "importar"]);
   const RELATORIOS_SUBROTAS = new Set(["ranking", "escalacao-ideal", "historico", "extrato", "retrospecto", "premiacoes"]);
   const ativa = CADASTROS_SUBROTAS.has(route) ? "cadastros" : RELATORIOS_SUBROTAS.has(route) ? "relatorios" : route;
   $$(".nav-link[data-route]").forEach(a => a.classList.toggle("active", a.dataset.route === ativa));
@@ -359,6 +360,7 @@ function render(){
   if (route === "jogos"){
     if (subId) renderJogoDetail(root, state, subId);
     else renderJogosList(root, state);
+  } else if (route === "importar"){ renderImportar(root, state);
   } else if (route === "modojogo"){
     if (subId) renderModoJogo(root, state, subId);
     else {

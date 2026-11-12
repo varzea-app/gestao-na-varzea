@@ -156,6 +156,34 @@ export async function gravarEmLote(itens){
   }
 }
 
+// Importação por planilha. Cada item: { colecao, id?, dados, existente }.
+// Novo (existente=false): cria com id gerado (ou o id informado) e criadoEm.
+// Já existente: atualiza só os campos enviados, sem apagar o resto do documento.
+// Devolve { id, colecao } de cada novo item, na ordem recebida.
+export async function importarEmLote(itens){
+  exigirPlanoVigente();
+  const feitos = [];
+  for (let i = 0; i < itens.length; i += 400){
+    const lote = writeBatch(db);
+    itens.slice(i, i + 400).forEach(it => {
+      if (it.existente){
+        lote.update(docRef(it.colecao, it.id), it.dados);
+      } else {
+        const ref = it.id ? docRef(it.colecao, it.id) : doc(colRef(it.colecao));
+        lote.set(ref, { ...it.dados, criadoEm: serverTimestamp() });
+        feitos.push({ id: ref.id, colecao: it.colecao });
+      }
+    });
+    await lote.commit();
+  }
+  return feitos;
+}
+
+// Gera um id novo para a coleção do time (usado para ligar jogos a adversários e campos criados na mesma importação).
+export function novoIdDoc(colecao){
+  return doc(colRef(colecao)).id;
+}
+
 // Apaga vários documentos de uma vez. Cada item: { colecao, id }.
 export async function apagarEmLote(itens){
   exigirPlanoVigente();

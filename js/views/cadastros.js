@@ -332,6 +332,10 @@ export function renderCadastrosHub(root, state){
       route: "campos", label: "Campos", desc: `${state.campos.length} cadastrado${state.campos.length === 1 ? "" : "s"}${campoSem ? ` · ${campoSem} sem jogos` : ""}`,
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/><circle cx="12" cy="12" r="2.4"/><path d="M12 6v12M3 9h3v6H3M18 9h3v6h-3"/></svg>`,
     },
+    {
+      route: "importar", label: "Importar planilha", desc: "Cadastre jogadores e partidas por Excel",
+      icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>`,
+    },
   ];
 
   root.innerHTML = `
