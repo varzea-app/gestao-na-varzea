@@ -32,6 +32,7 @@ const state = {
   isAuthorized: false,   // logado E da equipe do time aberto (ou dono da plataforma)
   usuario: null,
   ehSuper: false,
+  falhaLeitura: false,   // alguma leitura do banco falhou (cota esgotada, sem internet...)
 };
 
 // "time"    = há um time aberto e ele existe
@@ -95,18 +96,36 @@ function saveCache(){
 let completo = false;
 let paraEscutaLeve = [];
 
+// Leituras que falharam (ex.: cota diária do Firestore esgotada ou sem internet).
+// Quando falha, o app mantém os dados que já tinha (não troca por lista vazia),
+// não grava essa versão incompleta no cache local e mostra um aviso.
+const falhasLeitura = new Set();
+
 function onDataChange(){
-  if (completo && allLoaded()) saveCache();
+  state.falhaLeitura = falhasLeitura.size > 0;
+  if (completo && allLoaded() && !state.falhaLeitura) saveCache();
   render();
 }
 
+// Aplica o resultado de uma leitura ao estado; se deu erro, só registra a falha.
+function receber(nome, chaveLoaded, err, aplicar){
+  if (err) falhasLeitura.add(nome); else { falhasLeitura.delete(nome); aplicar(); }
+  state.loaded[chaveLoaded] = true;
+  onDataChange();
+}
+
+function faixaFalhaLeitura(){
+  if (!falhasLeitura.size) return "";
+  return `<div class="plano-faixa plano-faixa-erro">Não foi possível atualizar os dados agora (o servidor pode estar no limite de uso do dia ou a internet caiu).${completo ? " Você está vendo a última versão salva." : ""} Tente de novo mais tarde, recarregando a página.</div>`;
+}
+
 function startListeners(){
-  listenCollection("adversarios", "nome", (items) => { state.adversarios = items; state.loaded.adversarios = true; onDataChange(); });
-  listenCollection("campos", "nome", (items) => { state.campos = items; state.loaded.campos = true; onDataChange(); });
-  listenCollection("atletas", "nome", (items) => { state.atletas = items; state.loaded.atletas = true; onDataChange(); });
-  listenCollection("jogos", "data", (items) => { state.jogos = items; state.loaded.jogos = true; onDataChange(); });
-  listenCollection("financeiro", "data", (items) => { state.financeiro = items; state.loaded.financeiro = true; onDataChange(); });
-  listenDoc("configuracoes", "geral", (item) => { state.configFinanceiro = item; state.loaded.configFinanceiro = true; onDataChange(); });
+  listenCollection("adversarios", "nome", (items, err) => receber("adversarios", "adversarios", err, () => { state.adversarios = items; }));
+  listenCollection("campos", "nome", (items, err) => receber("campos", "campos", err, () => { state.campos = items; }));
+  listenCollection("atletas", "nome", (items, err) => receber("atletas", "atletas", err, () => { state.atletas = items; }));
+  listenCollection("jogos", "data", (items, err) => receber("jogos", "jogos", err, () => { state.jogos = items; }));
+  listenCollection("financeiro", "data", (items, err) => receber("financeiro", "financeiro", err, () => { state.financeiro = items; }));
+  listenDoc("configuracoes", "geral", (item, err) => receber("configuracoes", "configFinanceiro", err, () => { state.configFinanceiro = item; }));
 }
 
 // Modo leve da tela de presença: lê os atletas (a lista de nomes), o jogo do
@@ -116,8 +135,15 @@ function startListenersPresenca(jogoId){
   completo = false;
   state.loaded = { adversarios: false, campos: false, atletas: false, jogos: false, financeiro: true, configFinanceiro: true };
   let jogoLido = null;
-  paraEscutaLeve.push(listenCollection("atletas", "nome", (items) => { state.atletas = items; state.loaded.atletas = true; onDataChange(); }));
-  paraEscutaLeve.push(listenDoc("jogos", jogoId, async (jogo) => {
+  paraEscutaLeve.push(listenCollection("atletas", "nome", (items, err) => receber("atletas", "atletas", err, () => { state.atletas = items; })));
+  paraEscutaLeve.push(listenDoc("jogos", jogoId, async (jogo, err) => {
+    if (err){
+      falhasLeitura.add("jogo");
+      state.loaded.jogos = true; state.loaded.adversarios = true; state.loaded.campos = true;
+      onDataChange();
+      return;
+    }
+    falhasLeitura.delete("jogo");
     const ligacao = jogo ? `${jogo.adversarioId || ""}|${jogo.campoId || ""}` : "";
     state.jogos = jogo ? [jogo] : [];
     state.loaded.jogos = true;
@@ -140,6 +166,7 @@ function promoverParaCompleto(){
   if (completo) return;
   paraEscutaLeve.forEach(f => { try{ f(); }catch(err){ /* ok */ } });
   paraEscutaLeve = [];
+  falhasLeitura.clear();
   completo = true;
   state.adversarios = []; state.campos = []; state.atletas = []; state.jogos = []; state.financeiro = []; state.configFinanceiro = null;
   state.loaded = { adversarios: false, campos: false, atletas: false, jogos: false, financeiro: false, configFinanceiro: false };
@@ -298,7 +325,7 @@ function render(){
     else renderDashboard(root, state);
   }
 
-  const faixa = faixaDoPlano();
+  const faixa = faixaFalhaLeitura() + faixaDoPlano();
   if (faixa) root.insertAdjacentHTML("afterbegin", faixa);
   root.classList.toggle("somente-leitura", somenteLeitura());
 }

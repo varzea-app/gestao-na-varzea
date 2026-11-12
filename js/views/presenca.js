@@ -30,6 +30,10 @@ export function renderPresenca(root, state, jogoId){
   const jogo = state.jogos.find(j => j.id === jogoId);
   if (!jogo){
     pararEscuta();
+    if (state.falhaLeitura){
+      root.innerHTML = `<div class="empty-state"><h3>Não foi possível carregar agora</h3><p>O servidor está ocupado ou sem conexão. Tente de novo mais tarde.</p></div>`;
+      return;
+    }
     root.innerHTML = `<div class="empty-state"><h3>Jogo não encontrado</h3><p>O link pode estar incorreto ou o jogo foi excluído.</p></div>`;
     return;
   }
