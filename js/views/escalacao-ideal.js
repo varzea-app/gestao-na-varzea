@@ -480,9 +480,9 @@ export function renderEscalacaoIdeal(root, state){
   root.innerHTML = `
     <div class="topbar">
       <div><div class="eyebrow">Visão geral</div><h1>Escalação ideal</h1></div>
-      <button class="btn-icon-share" id="btn-print-escalacao" type="button" title="Compartilhar imagem da escalação" aria-label="Compartilhar imagem da escalação" ${!temDados ? "disabled" : ""}>
+      ${state.isAuthorized ? `<button class="btn-icon-share" id="btn-print-escalacao" type="button" title="Compartilhar imagem da escalação" aria-label="Compartilhar imagem da escalação" ${!temDados ? "disabled" : ""}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-      </button>
+      </button>` : ""}
     </div>
     ${manchete}
     <details class="como-funciona" style="margin:0 0 18px; font-size:13px; color:var(--ink-soft); max-width:680px;">

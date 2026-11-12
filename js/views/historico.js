@@ -350,9 +350,9 @@ function openSumulaModal(jogo, state){
     <div class="modal-head">
       <h3>Súmula da partida</h3>
       <div style="display:flex; align-items:center; gap:6px;">
-        <button class="btn-icon-share" id="btn-share-sumula" type="button" title="Compartilhar imagem da súmula" aria-label="Compartilhar imagem da súmula">
+        ${state.isAuthorized ? `<button class="btn-icon-share" id="btn-share-sumula" type="button" title="Compartilhar imagem da súmula" aria-label="Compartilhar imagem da súmula">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-        </button>
+        </button>` : ""}
         <button class="modal-close" data-close>&times;</button>
       </div>
     </div>

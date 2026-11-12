@@ -202,10 +202,10 @@ export function renderPremiacoes(root, state){
           </select>
         </div>
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+      ${state.isAuthorized ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
         <button class="btn btn-primary btn-sm" id="pm-imagem" ${entregues.length ? "" : "disabled"}>Gerar imagem da premiação</button>
         <button class="btn btn-ghost btn-sm" id="pm-copiar" ${entregues.length ? "" : "disabled"}>Copiar texto</button>
-      </div>
+      </div>` : ""}
       <div class="tro-grid">${cards}</div>`;
     root.__premios = premios;
   } else {
@@ -241,7 +241,7 @@ export function renderPremiacoes(root, state){
         </div>
       </div>
       ${ranking.length ? `
-        <div style="margin-bottom:16px;"><button class="btn btn-primary btn-sm" id="pm-destaque">Gerar imagem do destaque</button></div>
+        ${state.isAuthorized ? `<div style="margin-bottom:16px;"><button class="btn btn-primary btn-sm" id="pm-destaque">Gerar imagem do destaque</button></div>` : ""}
         <div class="rank-podium">${[1, 0, 2].filter(i => top3[i]).map(i => pod(top3[i], i)).join("")}</div>
         ${resto ? `<div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Atleta</th><th>Nota média</th><th>Jogos</th><th>Gols</th><th>Assist.</th></tr></thead>
