@@ -336,6 +336,7 @@ export function renderJogoDetail(root, state, jogoId){
         <h1 style="margin-top:4px;">${TEAM.nomeHtml} vs ${escapeHtml(adv?.nome || "?")}</h1>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+        <button class="btn btn-gold" id="btn-modojogo">⚽ Modo jogo</button>
         <button class="btn btn-ghost" id="btn-flyer"${off("flyer")}>Gerar imagem</button>
         <button class="btn btn-ghost" id="btn-presenca-link"${off("presenca")}>Copiar link de presença</button>
         <button class="btn btn-ghost" id="btn-presenca"${off("presenca")}>Ver presença</button>
@@ -390,6 +391,7 @@ export function renderJogoDetail(root, state, jogoId){
 
   $("#btn-edit-jogo").addEventListener("click", () => openJogoForm(state, jogo));
   $("#btn-flyer").addEventListener("click", () => openFlyerModal(state, jogo));
+  $("#btn-modojogo").addEventListener("click", () => { location.hash = `#modojogo/${jogo.id}`; });
   $("#btn-presenca").addEventListener("click", () => { location.hash = `#presenca/${jogo.id}`; });
   $("#btn-presenca-link").addEventListener("click", async () => {
     try{ await navigator.clipboard.writeText(linkPresenca(jogo.id)); toast("Link de presença copiado.", "ok"); }

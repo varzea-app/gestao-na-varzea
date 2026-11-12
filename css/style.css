@@ -765,3 +765,64 @@ body.sem-time main#view-root{margin-left:0; padding:28px 18px 60px; max-width:76
 .somente-leitura .btn-cobrar, .somente-leitura .btn-isentar{display:none !important;}
 .plano-faixa a{margin-left:8px; font-weight:700; color:inherit; text-decoration:underline;}
 .venc-ok{color:var(--ink-soft);} .venc-aviso{color:#9a6a00; font-weight:700;} .venc-erro{color:var(--danger); font-weight:700;}
+
+/* ==========================================================================
+   Modo jogo (lançamento ao vivo, pensado para o celular)
+   ========================================================================== */
+.mj{max-width:560px; margin:0 auto; padding-bottom:90px;}
+.mj-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;}
+.mj-voltar{font-size:13px; color:var(--accent); font-weight:600; text-decoration:none;}
+.mj-status{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:3px 9px; border-radius:99px; background:var(--pitch-light); color:var(--ink-soft);}
+.mj-status.ok{background:var(--gold); color:var(--gold-ink);}
+.mj-info{font-size:12.5px; color:var(--ink-soft); margin-bottom:12px;}
+.mj-placar{display:flex; align-items:center; justify-content:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 10px; box-shadow:var(--shadow);}
+.mj-lado{flex:1; text-align:center; min-width:0;}
+.mj-time{font-size:13px; font-weight:700; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mj-num{font-family:var(--font-display); font-size:76px; line-height:1; color:var(--heading); margin-top:4px;}
+.mj-x{font-size:26px; color:var(--ink-faint);}
+.mj-relogio-box{display:flex; align-items:center; justify-content:center; gap:10px; margin:14px 0;}
+.mj-relogio{font-family:var(--font-display); font-size:30px; letter-spacing:.04em; color:var(--ink);}
+.mj-btn-gol{display:block; width:100%; border:none; border-radius:16px; padding:26px 12px; font-size:21px; font-weight:800; letter-spacing:.02em; background:var(--gold); color:var(--gold-ink); box-shadow:0 4px 0 rgba(0,0,0,.18); cursor:pointer;}
+.mj-btn-gol:active{transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.18);}
+.mj-linha{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;}
+.mj-btn-sec{flex:1; border:2px solid var(--line); background:var(--card); color:var(--ink); border-radius:14px; padding:18px 10px; font-size:16px; font-weight:700; cursor:pointer;}
+.mj-btn-sec.peq{flex:0 0 72px;}
+.mj-btn-sec:disabled{opacity:.4;}
+.mj-btn-sec:active{background:var(--pitch-light);}
+.mj-btn-link{background:none; border:none; color:var(--accent); font-size:13px; font-weight:600; text-decoration:underline; padding:8px 2px; cursor:pointer;}
+.mj-aviso{font-size:12px; color:var(--ink-faint);}
+.mj-desfazer{display:block; width:100%; margin-top:10px; padding:12px; border:1px dashed var(--line); background:transparent; color:var(--ink-soft); border-radius:12px; font-size:14px; font-weight:600; cursor:pointer;}
+.mj-sec-titulo{margin:22px 0 8px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-soft);}
+.mj-vazio{font-size:13px; color:var(--ink-faint);}
+.mj-evt{display:flex; align-items:center; gap:10px; padding:11px 4px; border-bottom:1px solid var(--line);}
+.mj-evt-min{min-width:34px; font-weight:700; color:var(--ink-soft); font-size:13px;}
+.mj-evt-txt{flex:1; font-size:14px; min-width:0;}
+.mj-evt-sub{color:var(--ink-soft); font-size:12px;}
+.mj-evt-del{border:none; background:var(--danger-bg); color:var(--danger); border-radius:8px; width:36px; height:36px; font-size:15px; cursor:pointer;}
+.mj-rodape{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:22px;}
+.mj-nota{font-size:12.5px; color:var(--ink-soft);}
+
+/* Folha inferior (escolha de jogadores) */
+.mj-fundo{position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:120; display:flex; align-items:flex-end; justify-content:center;}
+.mj-sheet{background:var(--card); width:100%; max-width:560px; max-height:92vh; overflow-y:auto; border-radius:20px 20px 0 0; padding:16px 14px calc(18px + env(safe-area-inset-bottom));}
+.mj-sheet-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:17px;}
+.mj-fechar{border:none; background:var(--pitch-light); color:var(--ink); width:38px; height:38px; border-radius:50%; font-size:16px; cursor:pointer;}
+.mj-sub{font-size:13px; color:var(--ink-soft); margin-bottom:8px;}
+.mj-grade{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
+.mj-jog{display:flex; align-items:center; gap:8px; text-align:left; border:2px solid var(--line); background:var(--card); color:var(--ink); border-radius:12px; padding:14px 10px; font-size:15px; font-weight:600; cursor:pointer; min-height:54px;}
+.mj-jog span{overflow:hidden; text-overflow:ellipsis;}
+.mj-jog-n{flex:0 0 auto; min-width:26px; height:26px; border-radius:50%; background:var(--pitch-light); display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;}
+.mj-jog:active{background:var(--pitch-light);}
+.mj-jog.sel{border-color:var(--gold); background:rgba(228,182,43,.18);}
+.mj-jog.contra{width:100%; justify-content:center; border-style:dashed;}
+.mj-sheet-pe{margin-top:6px; text-align:center;}
+.mj-campos{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 0;}
+.mj-campos label{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--ink-soft); font-weight:600;}
+.mj-campos input, .mj-campos select{padding:11px 8px; font-size:16px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); width:100%;}
+.mj-sheet-acoes{display:flex; gap:10px; align-items:stretch; position:sticky; bottom:calc(-18px - env(safe-area-inset-bottom)); background:var(--card); padding:10px 0 calc(18px + env(safe-area-inset-bottom)); margin-bottom:calc(-18px - env(safe-area-inset-bottom)); border-top:1px solid var(--line);}
+.mj-btn-salvar{flex:1; border:none; background:var(--gold); color:var(--gold-ink); border-radius:12px; font-size:16px; font-weight:800; padding:16px 10px; cursor:pointer;}
+
+/* Plano vencido: modo jogo só para consulta */
+.somente-leitura .mj-btn-gol, .somente-leitura .mj-linha, .somente-leitura .mj-desfazer,
+.somente-leitura .mj-evt-del, .somente-leitura #mj-encerrar, .somente-leitura .mj-relogio-box button{display:none !important;}
+@media (min-width:881px){ .mj{padding-bottom:40px;} .mj-fundo{align-items:center;} .mj-sheet{border-radius:20px;} }

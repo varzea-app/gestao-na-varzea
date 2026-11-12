@@ -205,6 +205,7 @@ export function renderDashboard(root, state){
         <div class="dash-hero-title">vs ${nomeAdv(proximo.adversarioId)}</div>
         <div class="dash-hero-sub">${formatDate(proximo.data)}${proximo.horario ? ` · ${escapeHtml(proximo.horario)}` : ""} · ${nomeCampo(proximo.campoId)}</div>
         <div class="dash-hero-pres" id="hero-pres"></div>
+        ${state.isAuthorized ? `<button class="btn btn-gold btn-sm" id="hero-modojogo" style="margin-top:12px;">⚽ Modo jogo</button>` : ""}
       </div>
       ${destaqueMes ? destaqueMesHtml(destaqueMes, mesDestaque) : ""}
     </div>` : (destaqueMes ? `<div class="dash-top">${destaqueMesHtml(destaqueMes, mesDestaque)}</div>` : "")}
@@ -282,6 +283,7 @@ export function renderDashboard(root, state){
     });
   }
 
+  $("#hero-modojogo", root)?.addEventListener("click", (e) => { e.stopPropagation(); location.hash = `#modojogo/${proximo.id}`; });
   $$("[data-goto]", root).forEach(el => el.addEventListener("click", () => {
     const j = state.jogos.find(x => x.id === el.dataset.goto);
     // Jogo realizado abre a súmula (pública); agendado abre a página do jogo.
