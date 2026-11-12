@@ -1,6 +1,7 @@
 import { auth, db, emailNormalizado, ehSuperAdmin } from "./auth.js";
 import {
-  doc, getDoc, setDoc, updateDoc, getDocs, collection, onSnapshot, serverTimestamp, Timestamp, arrayUnion
+  doc, getDoc, setDoc, updateDoc, getDocs, deleteDoc, collection, onSnapshot, serverTimestamp, Timestamp, arrayUnion,
+  arrayRemove, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { APP_NOME, DIAS_DE_TESTE } from "./firebase-config.js";
 
@@ -358,6 +359,46 @@ export async function listarTimes(){
 // Só o dono da plataforma: muda plano e validade de qualquer time.
 export async function atualizarPlanoDoTime(id, { plano, validoAte }){
   await updateDoc(doc(db, "times", id), { plano, validoAte: Timestamp.fromDate(validoAte) });
+}
+
+// Coleções de dados que existem dentro de times/{id}. O Firestore não apaga
+// subcoleções sozinho quando o documento do time é apagado, por isso a lista
+// fica aqui (e o backup usa a mesma).
+export const SUBCOLECOES_DO_TIME = ["adversarios", "campos", "atletas", "atletas_privado", "jogos", "financeiro", "configuracoes", "presencas"];
+
+// Só o dono da plataforma: apaga o time inteiro (todos os dados, a equipe e o
+// próprio time) e tira o time da lista "Seus times" de quem fazia parte dele.
+// Devolve quantos documentos foram apagados. O documento do time é o último a
+// sair, então, se algo falhar no meio, o time continua na lista e dá para tentar de novo.
+export async function excluirTime(id){
+  if (!idValido(id)) throw new Error("Código de time inválido.");
+  const emails = new Set();
+  const equipe = await getDoc(doc(db, "times", id, "privado", "equipe"));
+  if (equipe.exists()) (equipe.data().emails || []).forEach(e => emails.add(emailNormalizado(e)));
+  const time = await getDoc(doc(db, "times", id));
+  if (time.exists() && time.data().donoEmail) emails.add(emailNormalizado(time.data().donoEmail));
+
+  let total = 0;
+  for (const nome of [...SUBCOLECOES_DO_TIME, "privado"]){
+    const snap = await getDocs(collection(db, "times", id, nome));
+    const refs = snap.docs.map(d => d.ref);
+    for (let i = 0; i < refs.length; i += 400){
+      const lote = writeBatch(db);
+      refs.slice(i, i + 400).forEach(r => lote.delete(r));
+      await lote.commit();
+    }
+    total += refs.length;
+  }
+  await deleteDoc(doc(db, "times", id));
+  total += 1;
+
+  // Limpa o atalho "Seus times". Falha aqui não é grave (o atalho só aponta para um time que não existe mais).
+  for (const email of emails){
+    try{ await setDoc(doc(db, "acessos", email), { times: arrayRemove(id) }, { merge: true }); }
+    catch(err){ console.warn("Não consegui limpar o atalho de", email, err); }
+  }
+  try{ if (localStorage.getItem(LS_ULTIMO_TIME) === id) localStorage.removeItem(LS_ULTIMO_TIME); }catch(err){ /* ok */ }
+  return total;
 }
 
 export async function definirAutoCadastro(aberto){

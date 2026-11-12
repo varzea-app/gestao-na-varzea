@@ -1,6 +1,6 @@
 import { collection, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { db } from "./auth.js";
-import { TEAM } from "./tenant.js";
+import { TEAM, SUBCOLECOES_DO_TIME } from "./tenant.js";
 import { gravarEmLote } from "./db.js";
 
 // ============================================================================
@@ -10,7 +10,7 @@ import { gravarEmLote } from "./db.js";
 // guardar uma cópia de segurança.
 // ============================================================================
 
-export const COLECOES_BACKUP = ["adversarios", "campos", "atletas", "atletas_privado", "jogos", "financeiro", "configuracoes", "presencas"];
+export const COLECOES_BACKUP = SUBCOLECOES_DO_TIME;
 
 export const NOMES_COLECOES = {
   adversarios: "Adversários", campos: "Campos", atletas: "Atletas",
@@ -42,11 +42,11 @@ function decodificar(v){
 }
 
 // Lê todas as coleções do time aberto.
-export async function gerarBackup(){
+export async function gerarBackup(teamId = TEAM.id){
   const colecoes = {}, contagens = {}, falhas = [];
   for (const nome of COLECOES_BACKUP){
     try{
-      const snap = await getDocs(collection(db, "times", TEAM.id, nome));
+      const snap = await getDocs(collection(db, "times", teamId, nome));
       colecoes[nome] = snap.docs.map(d => ({ id: d.id, dados: codificar(d.data()) }));
       contagens[nome] = colecoes[nome].length;
     }catch(err){
@@ -55,7 +55,7 @@ export async function gerarBackup(){
     }
   }
   return {
-    backup: { formato: FORMATO, versao: 1, origem: `gestao-time:${TEAM.id}`, geradoEm: new Date().toISOString(), contagens, colecoes },
+    backup: { formato: FORMATO, versao: 1, origem: `gestao-time:${teamId}`, geradoEm: new Date().toISOString(), contagens, colecoes },
     contagens, falhas,
   };
 }

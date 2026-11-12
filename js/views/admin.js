@@ -1,5 +1,6 @@
-import { $, $$, escapeHtml, toast, formatDate, dataISOLocal } from "../utils.js";
-import { listarTimes, atualizarPlanoDoTime, definirAutoCadastro, irParaTime } from "../tenant.js";
+import { $, $$, escapeHtml, toast, formatDate, dataISOLocal, openModal, closeModal } from "../utils.js";
+import { listarTimes, atualizarPlanoDoTime, definirAutoCadastro, irParaTime, excluirTime } from "../tenant.js";
+import { gerarBackup, baixarJson } from "../backup.js";
 import { plataformaAberta } from "../tenant.js";
 import { PLANOS, diasAte } from "../planos.js";
 import { formCriarTimeHtml, ligarFormCriarTime } from "./landing.js";
@@ -78,6 +79,7 @@ export async function renderAdmin(root, state){
             <button class="btn btn-primary btn-sm" data-salvar>Salvar</button>
             <button class="btn btn-ghost btn-sm" data-cobrar>Lembrar no WhatsApp</button>
             <button class="btn btn-gold btn-sm" data-abrir>Abrir</button>
+            <button class="btn btn-danger btn-sm" data-excluir>Excluir</button>
           </td>
         </tr>`).join("")}</tbody>
     </table></div>` : `<div class="card-sub">Nenhum time ainda.</div>`;
@@ -93,6 +95,7 @@ export async function renderAdmin(root, state){
     });
     $("[data-sem-venc]", tr).addEventListener("click", () => { campoData.value = isoData(SEM_VENCIMENTO); });
     $("[data-abrir]", tr).addEventListener("click", () => irParaTime(id));
+    $("[data-excluir]", tr).addEventListener("click", () => abrirExclusao(root, state, times.find(x => x.id === id), () => renderAdmin(root, state)));
     $("[data-cobrar]", tr).addEventListener("click", () => {
       const t = times.find(x => x.id === id);
       window.open(`https://wa.me/?text=${encodeURIComponent(textoCobranca(t))}`, "_blank", "noopener");
@@ -110,5 +113,51 @@ export async function renderAdmin(root, state){
       }catch(err){ console.error(err); toast("Erro: " + err.message, "err"); }
       e.target.disabled = false;
     });
+  });
+}
+
+
+// ----------------------------------------------------------------------------
+// Excluir time: apaga todos os dados, a equipe e o próprio time. Para não
+// apagar por engano, é preciso digitar o código do time.
+// ----------------------------------------------------------------------------
+function abrirExclusao(root, state, time, aoTerminar){
+  openModal(`
+    <div class="modal-head"><h3>Excluir time</h3><button class="modal-close" id="exc-fechar">&times;</button></div>
+    <div class="modal-body">
+      <p style="font-size:13.5px; margin:0 0 8px;">Você vai apagar <strong>${escapeHtml(time.nome)}</strong> (<code>${escapeHtml(time.id)}</code>) e <strong>todos os dados dele</strong>: atletas, jogos, financeiro, presenças, configurações e a lista da equipe. <strong>Não dá para desfazer.</strong></p>
+      <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; margin:10px 0;"><input type="checkbox" id="exc-backup" checked> Baixar um backup (arquivo .json) antes de excluir</label>
+      <label style="font-size:13px; color:var(--ink-soft);">Para confirmar, digite o código do time:</label>
+      <input type="text" id="exc-codigo" autocomplete="off" placeholder="${escapeHtml(time.id)}" style="width:100%; margin-top:4px;">
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="exc-cancelar">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="exc-confirmar" disabled>Excluir definitivamente</button>
+      </div>
+      <div class="card-sub" id="exc-status" style="margin-top:8px;"></div>
+    </div>`);
+  const campo = $("#exc-codigo"), botao = $("#exc-confirmar"), status = $("#exc-status");
+  campo.addEventListener("input", () => { botao.disabled = campo.value.trim().toLowerCase() !== time.id; });
+  $("#exc-fechar").addEventListener("click", closeModal);
+  $("#exc-cancelar").addEventListener("click", closeModal);
+  botao.addEventListener("click", async () => {
+    if (campo.value.trim().toLowerCase() !== time.id) return;
+    botao.disabled = true; $("#exc-cancelar").disabled = true; campo.disabled = true;
+    try{
+      if ($("#exc-backup").checked){
+        status.textContent = "Gerando o backup…";
+        const { backup, falhas } = await gerarBackup(time.id);
+        if (falhas.length) throw new Error("Não consegui ler tudo para o backup (" + falhas.join(", ") + "). Nada foi apagado.");
+        baixarJson(backup, `backup-${time.id}-${dataISOLocal()}.json`);
+      }
+      status.textContent = "Apagando os dados do time…";
+      const total = await excluirTime(time.id);
+      closeModal();
+      toast(`Time ${time.id} excluído (${total} registros apagados).`, "ok");
+      aoTerminar();
+    }catch(err){
+      console.error(err);
+      status.textContent = "Erro: " + err.message + " — se algo ficou pela metade, é só tentar excluir de novo.";
+      botao.disabled = false; $("#exc-cancelar").disabled = false; campo.disabled = false;
+    }
   });
 }
