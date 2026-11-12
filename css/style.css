@@ -780,7 +780,8 @@ body.sem-time main#view-root{margin-left:0; padding:28px 18px 60px; max-width:76
 .mj-time{font-size:13px; font-weight:700; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .mj-num{font-family:var(--font-display); font-size:76px; line-height:1; color:var(--heading); margin-top:4px;}
 .mj-x{font-size:26px; color:var(--ink-faint);}
-.mj-relogio-box{display:flex; align-items:center; justify-content:center; gap:10px; margin:14px 0;}
+.mj-fase{text-align:center; margin-top:14px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-soft);}
+.mj-relogio-box{display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; margin:8px 0;}
 .mj-relogio{font-family:var(--font-display); font-size:30px; letter-spacing:.04em; color:var(--ink);}
 .mj-btn-gol{display:block; width:100%; border:none; border-radius:16px; padding:26px 12px; font-size:21px; font-weight:800; letter-spacing:.02em; background:var(--gold); color:var(--gold-ink); box-shadow:0 4px 0 rgba(0,0,0,.18); cursor:pointer;}
 .mj-btn-gol:active{transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.18);}

@@ -18,16 +18,24 @@ let ultimoDesfazer = null; // { jogoId, antes: {campos} } para desfazer a últim
 let jogoAberto = null;     // id do jogo atualmente na tela (limpa a folha ao trocar)
 
 // ----------------------------------------------------------------------------
-// Cronômetro (opcional) — guardado no aparelho, por jogo
+// Cronômetro com tempos — guardado no aparelho, por jogo.
+// fase: "pre" (não começou) | "t1" | "int" (intervalo) | "t2" | "fim"
+// acum = tempo jogado (sem contar o intervalo); inicio = quando voltou a rodar
+// (null = pausado). O minuto do gol segue contando do 1º para o 2º tempo.
 // ----------------------------------------------------------------------------
 const chaveRelogio = (jogoId) => `modojogo_relogio_${TEAM.id}_${jogoId}`;
+const FASES = { pre: "Antes do jogo", t1: "1º tempo", int: "Intervalo", t2: "2º tempo", fim: "Fim de jogo" };
 
 function lerRelogio(jogoId){
   try{
     const r = JSON.parse(localStorage.getItem(chaveRelogio(jogoId)) || "null");
-    if (r && typeof r.acum === "number") return { acum: r.acum, inicio: r.inicio || null };
+    if (r && typeof r.acum === "number"){
+      // Formato antigo (sem fase): se já rodou, é 1º tempo.
+      const fase = r.fase || ((r.acum > 0 || r.inicio) ? "t1" : "pre");
+      return { fase, acum: r.acum, inicio: r.inicio || null };
+    }
   }catch(_){}
-  return { acum: 0, inicio: null };
+  return { fase: "pre", acum: 0, inicio: null };
 }
 function gravarRelogio(jogoId, r){
   try{ localStorage.setItem(chaveRelogio(jogoId), JSON.stringify(r)); }catch(_){}
@@ -37,11 +45,21 @@ function textoRelogio(ms){
   const s = Math.floor(ms / 1000);
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
-// Minuto "de futebol": 0:00–0:59 = 1º minuto. Sem cronômetro rodando/usado = null.
+// Minuto "de futebol": 0:00–0:59 = 1º minuto. Sem cronômetro usado = null.
 function minutoAtual(jogoId){
   const r = lerRelogio(jogoId);
-  if (!r.inicio && r.acum === 0) return null;
+  if (r.fase === "pre") return null;
   return Math.floor(decorridoMs(r) / 60000) + 1;
+}
+// Qual tempo marcar no gol: só quando o jogo está rolando (ou pausado) em um dos tempos.
+function tempoAtual(jogoId){
+  const f = lerRelogio(jogoId).fase;
+  return f === "t1" ? "1º tempo" : f === "t2" ? "2º tempo" : "";
+}
+// Muda de fase congelando o tempo corrido.
+function mudarFase(jogoId, fase, rodar){
+  const r = lerRelogio(jogoId);
+  gravarRelogio(jogoId, { fase, acum: decorridoMs(r), inicio: rodar ? Date.now() : null });
 }
 
 function pararTicker(){
@@ -144,10 +162,17 @@ export function renderModoJogo(root, state, jogoId){
         </div>
       </div>
 
+      <div class="mj-fase">${FASES[relogio.fase]}${relogio.fase === "t1" || relogio.fase === "t2" ? (rodando ? " · rolando" : " · pausado") : ""}</div>
       <div class="mj-relogio-box">
         <span class="mj-relogio" id="mj-relogio">${textoRelogio(decorridoMs(relogio))}</span>
-        <button class="btn btn-ghost btn-sm" id="mj-rel-toggle">${rodando ? "⏸ Pausar" : (relogio.acum > 0 ? "▶ Continuar" : "▶ Iniciar cronômetro")}</button>
-        ${relogio.acum > 0 || rodando ? `<button class="btn btn-ghost btn-sm" id="mj-rel-zerar">Zerar</button>` : ""}
+      </div>
+      <div class="mj-relogio-box">
+        ${relogio.fase === "pre" ? `<button class="btn btn-gold btn-sm" id="mj-ini-t1">▶ Iniciar 1º tempo</button>` : ""}
+        ${relogio.fase === "t1" || relogio.fase === "t2" ? `
+          <button class="btn btn-ghost btn-sm" id="mj-rel-toggle">${rodando ? "⏸ Pausar" : "▶ Continuar"}</button>
+          <button class="btn btn-ghost btn-sm" id="${relogio.fase === "t1" ? "mj-fim-t1" : "mj-fim-jogo"}">${relogio.fase === "t1" ? "Encerrar 1º tempo" : "Encerrar jogo"}</button>` : ""}
+        ${relogio.fase === "int" ? `<button class="btn btn-gold btn-sm" id="mj-ini-t2">▶ Iniciar 2º tempo</button>` : ""}
+        ${relogio.fase !== "pre" ? `<button class="btn btn-ghost btn-sm" id="mj-rel-zerar">Zerar</button>` : ""}
       </div>
 
       <button class="mj-btn-gol" id="mj-gol">⚽ GOL DO NOSSO TIME</button>
@@ -231,22 +256,30 @@ function ligar(root, state, jogo, atletas){
   const nosPlacar = jogo.placarNos ?? eventos.length;
   const advPlacar = jogo.placarAdversario ?? 0;
 
-  // Cronômetro
+  // Cronômetro e tempos
+  $("#mj-ini-t1", root)?.addEventListener("click", () => { mudarFase(jogo.id, "t1", true); re(); });
   $("#mj-rel-toggle", root)?.addEventListener("click", () => {
     const r = lerRelogio(jogo.id);
-    if (r.inicio) gravarRelogio(jogo.id, { acum: decorridoMs(r), inicio: null });
-    else gravarRelogio(jogo.id, { acum: r.acum, inicio: Date.now() });
+    mudarFase(jogo.id, r.fase, !r.inicio);
+    re();
+  });
+  $("#mj-fim-t1", root)?.addEventListener("click", () => { mudarFase(jogo.id, "int", false); toast("1º tempo encerrado. Intervalo.", "ok"); re(); });
+  $("#mj-ini-t2", root)?.addEventListener("click", () => { mudarFase(jogo.id, "t2", true); re(); });
+  $("#mj-fim-jogo", root)?.addEventListener("click", async () => {
+    mudarFase(jogo.id, "fim", false);
+    if (jogo.status !== "realizado") await gravar(jogo, { status: "realizado" }, "Jogo encerrado e marcado como realizado.");
+    else toast("Jogo encerrado.", "ok");
     re();
   });
   $("#mj-rel-zerar", root)?.addEventListener("click", async () => {
-    if (!(await confirmAction("Zerar o cronômetro?", { confirmLabel: "Zerar", title: "Zerar cronômetro" }))) return;
-    gravarRelogio(jogo.id, { acum: 0, inicio: null });
+    if (!(await confirmAction("Zerar o cronômetro e voltar para antes do jogo?", { confirmLabel: "Zerar", title: "Zerar cronômetro" }))) return;
+    gravarRelogio(jogo.id, { fase: "pre", acum: 0, inicio: null });
     re();
   });
 
   // Abrir o lançamento de gol
   $("#mj-gol", root)?.addEventListener("click", () => {
-    sheet = { passo: "autor", autor: null, assist: null, minuto: minutoAtual(jogo.id), tipo: "", tempo: "" };
+    sheet = { passo: "autor", autor: null, assist: null, minuto: minutoAtual(jogo.id), tipo: "", tempo: tempoAtual(jogo.id) };
     re();
   });
 
@@ -299,7 +332,7 @@ function ligar(root, state, jogo, atletas){
     if (id === GOL_CONTRA_ID){
       // Gol contra: sem assistência, grava direto.
       const min = sheet.minuto;
-      const novo = { atletaGolId: GOL_CONTRA_ID, atletaAssistId: null, minuto: min ?? null, tipoGol: null, tempo: null };
+      const novo = { atletaGolId: GOL_CONTRA_ID, atletaAssistId: null, minuto: min ?? null, tipoGol: null, tempo: sheet.tempo || null };
       const ok = await gravar(jogo, {
         ...statusCampos(jogo),
         golsAssistencias: [...eventos, novo],
