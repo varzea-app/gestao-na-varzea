@@ -82,7 +82,14 @@ export function planoVigente(){
   return !TEAM.validoAte || TEAM.validoAte.getTime() > Date.now();
 }
 
+// Dias de calendário entre hoje e a data (negativo = já passou). Contar por
+// dia evita "faltam 6 dias" para uma data que vence daqui a 5 (o plano vale
+// até o fim do dia).
+export function diasAte(data){
+  const dia = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((dia(data) - dia(new Date())) / 86400000);
+}
+
 export function diasRestantes(){
-  if (!TEAM.validoAte) return null;
-  return Math.ceil((TEAM.validoAte.getTime() - Date.now()) / 86400000);
+  return TEAM.validoAte ? diasAte(TEAM.validoAte) : null;
 }

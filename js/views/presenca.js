@@ -135,7 +135,7 @@ function desenhar(root, state, jogoId){
       toast(`${nome}: ${RESPOSTAS.find(r => r.key === btn.dataset.resp).label}`, "ok");
     }catch(err){
       console.error(err);
-      toast("Não foi possível salvar sua resposta. Tente de novo.", "err");
+      toast(err.code === "plano-vencido" ? "As confirmações deste time estão pausadas. Avise o responsável pelo time." : "Não foi possível salvar sua resposta. Tente de novo.", "err");
       btn.disabled = false;
     }
   }));

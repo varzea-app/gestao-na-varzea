@@ -735,3 +735,16 @@ body.sem-time main#view-root{margin-left:0; padding:28px 18px 60px; max-width:76
 /* Faixa de plano (teste / vencido) */
 .plano-faixa{background:var(--gold-soft, rgba(228,182,43,.16)); color:var(--ink); border:1px solid var(--gold, #E4B62B); border-radius:var(--radius-sm); padding:9px 14px; font-size:13px; font-weight:600; margin-bottom:16px;}
 .plano-faixa-erro{background:var(--danger-bg); color:var(--danger); border-color:var(--danger);}
+
+/* Plano vencido: esconde os botões de cadastrar/editar/excluir (as regras do
+   Firestore e o db.js também barram a gravação, isto é só para não confundir). */
+.somente-leitura #btn-new, .somente-leitura #btn-new-jogo, .somente-leitura #btn-add-evt,
+.somente-leitura #btn-delete-item, .somente-leitura #btn-delete-jogo, .somente-leitura #btn-dup-jogo,
+.somente-leitura #btn-edit-jogo, .somente-leitura #btn-editar-mensalidade, .somente-leitura #btn-entrada,
+.somente-leitura #btn-saida, .somente-leitura #btn-save-adversario, .somente-leitura #btn-save-avaliacao,
+.somente-leitura #btn-save-campo, .somente-leitura [data-edit-evt], .somente-leitura [data-excluir],
+.somente-leitura [data-remove-evt], .somente-leitura [data-save-escalacao],
+.somente-leitura .btn-excluir-transacao, .somente-leitura .btn-editar-transacao,
+.somente-leitura .btn-cobrar, .somente-leitura .btn-isentar{display:none !important;}
+.plano-faixa a{margin-left:8px; font-weight:700; color:inherit; text-decoration:underline;}
+.venc-ok{color:var(--ink-soft);} .venc-aviso{color:#9a6a00; font-weight:700;} .venc-erro{color:var(--danger); font-weight:700;}

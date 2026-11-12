@@ -147,17 +147,27 @@ function renderRecursoNaoIncluso(root, recurso){
     </div>`;
 }
 
-// Faixa no topo para a equipe: teste acabando / plano vencido.
+const WHATS_RENOVAR = (assunto) => CONTATO_WHATSAPP
+  ? ` <a href="https://wa.me/${CONTATO_WHATSAPP}?text=${encodeURIComponent(assunto)}" target="_blank" rel="noopener">Falar no WhatsApp</a>`
+  : "";
+
+// Time com plano vencido (e quem está vendo não é o dono): só consulta.
+const somenteLeitura = () => modo === "time" && state.isAuthorized && !state.ehSuper && !planoVigente();
+
+// Faixa no topo para a equipe: teste acabando, plano perto de vencer ou vencido.
 function faixaDoPlano(){
   if (!state.isAuthorized) return "";
+  const dataFim = TEAM.validoAte ? formatDate(TEAM.validoAte.toISOString().slice(0, 10)) : "";
   if (!planoVigente()){
-    return `<div class="plano-faixa plano-faixa-erro">Plano vencido${TEAM.validoAte ? " em " + formatDate(TEAM.validoAte.toISOString().slice(0, 10)) : ""}. O time está só em consulta: renove para voltar a cadastrar.</div>`;
+    return `<div class="plano-faixa plano-faixa-erro">Plano vencido${dataFim ? " em " + dataFim : ""}. O time está só em consulta: renove para voltar a cadastrar.${WHATS_RENOVAR(`Olá! Quero renovar o plano do time ${TEAM.nome}.`)}</div>`;
   }
+  const d = diasRestantes();
+  if (d === null || d > 3000) return "";
   if (TEAM.plano === "teste"){
-    const d = diasRestantes();
-    if (d !== null && d < 3000){
-      return `<div class="plano-faixa">Teste grátis: ${d <= 0 ? "termina hoje" : `faltam ${d} dia${d === 1 ? "" : "s"}`}. Todas as funções estão liberadas.</div>`;
-    }
+    return `<div class="plano-faixa">Teste grátis: ${d <= 0 ? "termina hoje" : `faltam ${d} dia${d === 1 ? "" : "s"}`}. Todas as funções estão liberadas.</div>`;
+  }
+  if (d <= 7){
+    return `<div class="plano-faixa">Seu plano vence ${d <= 0 ? "hoje" : d === 1 ? "amanhã" : `em ${d} dias`} (${dataFim}). Renove para não perder o acesso para cadastrar.${WHATS_RENOVAR(`Olá! Quero renovar o plano do time ${TEAM.nome}.`)}</div>`;
   }
   return "";
 }
@@ -243,6 +253,7 @@ function render(){
 
   const faixa = faixaDoPlano();
   if (faixa) root.insertAdjacentHTML("afterbegin", faixa);
+  root.classList.toggle("somente-leitura", somenteLeitura());
 }
 
 window.addEventListener("hashchange", render);

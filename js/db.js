@@ -2,8 +2,9 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, orderBy, where, serverTimestamp, setDoc, getDoc, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { db } from "./auth.js";
+import { db, auth, ehSuperAdmin } from "./auth.js";
 import { TEAM } from "./tenant.js";
+import { planoVigente } from "./planos.js";
 
 // ----------------------------------------------------------------------------
 // MULTI-TIME: todo dado do time mora em  times/{TEAM.id}/{coleção}/{doc}.
@@ -11,6 +12,19 @@ import { TEAM } from "./tenant.js";
 // etc. com o nome simples da coleção; é aqui que o caminho do time é colocado,
 // então um time nunca enxerga nem grava nos dados de outro.
 // ----------------------------------------------------------------------------
+
+
+// Plano vencido: o time fica só em consulta. As regras do Firestore já recusam
+// a gravação; aqui interrompemos antes, com uma mensagem clara. O dono da
+// plataforma não é barrado.
+function exigirPlanoVigente(){
+  if (planoVigente()) return;
+  if (auth.currentUser && ehSuperAdmin(auth.currentUser.email)) return;
+  throw Object.assign(
+    new Error("o plano do time venceu e ele está só em consulta. Renove para voltar a cadastrar."),
+    { code: "plano-vencido" }
+  );
+}
 
 function colRef(name){
   if (!TEAM.id) throw new Error("Nenhum time selecionado.");
@@ -38,14 +52,17 @@ export function listenCollection(name, orderField, cb){
 }
 
 export async function createDoc(name, data){
+  exigirPlanoVigente();
   return addDoc(colRef(name), { ...data, criadoEm: serverTimestamp() });
 }
 
 export async function saveDoc(name, id, data){
+  exigirPlanoVigente();
   return updateDoc(docRef(name, id), data);
 }
 
 export async function removeDoc(name, id){
+  exigirPlanoVigente();
   return deleteDoc(docRef(name, id));
 }
 
@@ -54,6 +71,7 @@ export async function removeDoc(name, id){
 // (id = mês + atleta), onde marcar/desmarcar "pago" precisa ser uma
 // operação idempotente (criar de novo com o mesmo id só atualiza o valor).
 export async function createDocWithId(name, id, data){
+  exigirPlanoVigente();
   return setDoc(docRef(name, id), { ...data, criadoEm: serverTimestamp() });
 }
 
@@ -88,6 +106,7 @@ export function listenPresencas(jogoId, cb){
 }
 
 export async function setPresenca(jogoId, atletaId, resposta){
+  exigirPlanoVigente();
   return setDoc(docRef("presencas", `${jogoId}_${atletaId}`), {
     jogoId, atletaId, resposta, atualizadoEm: serverTimestamp(),
   });
@@ -100,6 +119,7 @@ export async function setPresenca(jogoId, atletaId, resposta){
 // ----------------------------------------------------------------------------
 
 export async function setPrivateDoc(name, id, data){
+  exigirPlanoVigente();
   return setDoc(docRef(name, id), data, { merge: true });
 }
 
@@ -114,6 +134,7 @@ export async function getPrivateDoc(name, id){
 // ----------------------------------------------------------------------------
 
 export async function updateJogoField(jogoId, fields){
+  exigirPlanoVigente();
   return updateDoc(docRef("jogos", jogoId), fields);
 }
 
@@ -121,6 +142,7 @@ export async function updateJogoField(jogoId, fields){
 // demonstração). Cada item: { colecao, id, dados }. O Firestore aceita até 500
 // operações por lote, então quebramos em partes.
 export async function gravarEmLote(itens){
+  exigirPlanoVigente();
   for (let i = 0; i < itens.length; i += 400){
     const lote = writeBatch(db);
     itens.slice(i, i + 400).forEach(it => lote.set(docRef(it.colecao, it.id), it.dados));
@@ -130,6 +152,7 @@ export async function gravarEmLote(itens){
 
 // Apaga vários documentos de uma vez. Cada item: { colecao, id }.
 export async function apagarEmLote(itens){
+  exigirPlanoVigente();
   for (let i = 0; i < itens.length; i += 400){
     const lote = writeBatch(db);
     itens.slice(i, i + 400).forEach(it => lote.delete(docRef(it.colecao, it.id)));
