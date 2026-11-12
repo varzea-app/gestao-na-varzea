@@ -132,6 +132,9 @@ button{font-family:var(--font-body); cursor:pointer;}
 .nav-link:hover{background:rgba(255,255,255,.08); color:#fff;}
 .nav-link.active{background:var(--gold); color:var(--gold-ink); font-weight:600;}
 .nav-link.active svg{opacity:1;}
+/* "Mais": só existe no celular, quando o menu tem mais itens do que cabem na barra de baixo. */
+.nav-mais{display:none;}
+.menu-mais{display:none;}
 
 .sidebar-footer{margin-top:auto; padding-top:14px; border-top:1px solid rgba(255,255,255,.12);}
 .user-chip{display:flex; align-items:center; gap:8px; padding:6px 8px;}
@@ -486,6 +489,20 @@ tbody tr.clickable{cursor:pointer;}
     text-align:center; white-space:nowrap;
   }
   .nav-link svg{width:19px; height:19px;}
+  .nav-link.em-mais{display:none !important;}
+  .nav-mais.visivel{display:flex;}
+  .menu-mais{
+    position:fixed; right:8px; bottom:calc(70px + env(safe-area-inset-bottom, 0px)); z-index:45;
+    min-width:200px; padding:6px; border-radius:12px; color:#fff;
+    background:linear-gradient(180deg, var(--pitch-dark), var(--pitch-darker));
+    box-shadow:0 8px 28px rgba(0,0,0,.4);
+  }
+  .menu-mais.aberto{display:block;}
+  .menu-mais .nav-link{
+    flex-direction:row; justify-content:flex-start; text-align:left;
+    font-size:14px; padding:12px 12px; min-width:0; gap:10px; margin:0; width:100%;
+  }
+  .menu-mais .nav-link svg{width:18px; height:18px;}
   main#view-root{margin-left:0; padding:70px 16px calc(84px + env(safe-area-inset-bottom, 0px));}
   .sumula{grid-template-columns:1fr auto 1fr;}
   .sumula-side .score{font-size:34px;}

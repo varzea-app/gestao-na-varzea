@@ -275,6 +275,41 @@ function atualizarVisibilidadeMenu(){
     const semPlano = el.dataset.semPlano === "1";
     el.style.display = autorizado && !semPlano ? "" : "none";
   });
+  atualizarMenuMobile();
+}
+
+// Barra de baixo do celular: no máximo 5 botões. Quando há mais itens visíveis,
+// os 4 mais usados ficam na barra e o resto vai para o botão "Mais". No
+// computador (menu lateral) isso não tem efeito.
+const PRIORIDADE_MOBILE = ["dashboard", "relatorios", "cadastros", "financeiro", "avaliacao", "configuracoes", "admin"];
+const MAX_BARRA_MOBILE = 5;
+
+function fecharMenuMais(){
+  $("#menu-mais")?.classList.remove("aberto");
+  $("#btn-mais")?.setAttribute("aria-expanded", "false");
+}
+
+function atualizarMenuMobile(){
+  const links = $$(".nav-link[data-route]");
+  const rank = (a) => { const i = PRIORIDADE_MOBILE.indexOf(a.dataset.route); return i < 0 ? 99 : i; };
+  const visiveis = links.filter(a => a.style.display !== "none").sort((a, b) => rank(a) - rank(b));
+  const extras = visiveis.length > MAX_BARRA_MOBILE ? visiveis.slice(MAX_BARRA_MOBILE - 1) : [];
+  links.forEach(a => a.classList.toggle("em-mais", extras.includes(a)));
+
+  const btn = $("#btn-mais"), painel = $("#menu-mais");
+  if (!btn || !painel) return;
+  btn.classList.toggle("visivel", extras.length > 0);
+  btn.classList.toggle("active", extras.some(a => a.classList.contains("active")));
+  painel.innerHTML = "";
+  extras.forEach(a => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "menuitem");
+    b.className = "nav-link" + (a.classList.contains("active") ? " active" : "");
+    b.innerHTML = a.innerHTML;
+    b.addEventListener("click", () => { fecharMenuMais(); location.hash = `#${a.dataset.route}`; });
+    painel.appendChild(b);
+  });
+  if (!extras.length) fecharMenuMais();
 }
 
 function render(){
@@ -331,6 +366,7 @@ function render(){
 }
 
 window.addEventListener("hashchange", () => {
+  fecharMenuMais();
   if (modo === "time" && !completo && parseHash().route !== "presenca") promoverParaCompleto();
   render();
 });
@@ -361,6 +397,16 @@ $$(".brand, .mobile-topbar-brand").forEach(el => {
 $$(".nav-link[data-route]").forEach(btn => {
   btn.addEventListener("click", () => { location.hash = `#${btn.dataset.route}`; });
 });
+
+$("#btn-mais")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const painel = $("#menu-mais");
+  const abrir = !painel.classList.contains("aberto");
+  painel.classList.toggle("aberto", abrir);
+  $("#btn-mais").setAttribute("aria-expanded", String(abrir));
+});
+document.addEventListener("click", (e) => { if (!e.target.closest("#menu-mais") && !e.target.closest("#btn-mais")) fecharMenuMais(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharMenuMais(); });
 
 // ============================================================================
 // Autenticação
