@@ -5,7 +5,7 @@
 import { TEAM } from "../tenant.js";
 import { $, $$, escapeHtml, toast, formatDateLong, confirmAction } from "../utils.js";
 import { updateJogoField } from "../db.js";
-import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
+import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, normalizeEscalacao } from "../stats.js";
 
 // ----------------------------------------------------------------------------
 // Estado da tela (fica na memória enquanto a página está aberta)
@@ -13,6 +13,7 @@ import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } 
 let sheet = null;          // null | { passo: "autor" | "assist", autor, assist, minuto, tipo, tempo }
 let elencoTodo = false;    // false = só escalados; true = elenco inteiro
 let salvando = false;
+let filaAberta = false;    // mostra todos os avisos pendentes (senão só os 3 mais recentes)
 let relogioTimer = null;
 let ultimoDesfazer = null; // { jogoId, antes: {campos} } para desfazer a última ação
 let jogoAberto = null;     // id do jogo atualmente na tela (limpa a folha ao trocar)
@@ -109,6 +110,86 @@ async function gravar(jogo, campos, mensagem){
 const statusCampos = (jogo) => jogo.status === "realizado" ? {} : { status: "realizado" };
 
 // ----------------------------------------------------------------------------
+// Avisos para o grupo do WhatsApp
+// Cada ação gera uma mensagem pronta numa "fila". O botão Enviar abre o WhatsApp
+// com o texto escrito; a pessoa escolhe o grupo e envia. Nada é enviado sozinho.
+// ----------------------------------------------------------------------------
+const chaveFila = (jogoId) => `modojogo_fila_${TEAM.id}_${jogoId}`;
+function lerFila(jogoId){
+  try{ const f = JSON.parse(localStorage.getItem(chaveFila(jogoId)) || "[]"); return Array.isArray(f) ? f : []; }catch(_){ return []; }
+}
+function gravarFila(jogoId, fila){
+  try{ localStorage.setItem(chaveFila(jogoId), JSON.stringify(fila.slice(-8))); }catch(_){}
+}
+function enfileirar(jogoId, rotulo, texto){
+  const fila = lerFila(jogoId);
+  fila.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), rotulo, texto });
+  gravarFila(jogoId, fila);
+}
+function tirarDaFila(jogoId, id){
+  gravarFila(jogoId, lerFila(jogoId).filter(m => m.id !== id));
+}
+
+// c = { jogo, adv, campo, atletas, eventos, nos, advP }
+function nomeDe(c, id){ return id === GOL_CONTRA_ID ? "Gol contra do adversário" : (c.atletas.find(a => a.id === id)?.nome || "?"); }
+function placarLinha(c){ return `📊 *${TEAM.nome} ${c.nos} x ${c.advP} ${c.adv?.nome || "Adversário"}*`; }
+
+function linhaGol(c, e, detalhado){
+  const meta = detalhado ? [e.tempo, e.tipoGol].filter(Boolean).join(", ") : "";
+  return `⚽ ${nomeDe(c, e.atletaGolId)}${e.minuto != null ? ` ${e.minuto}'` : ""}${e.atletaAssistId ? ` — assist. ${nomeDe(c, e.atletaAssistId)}` : ""}${meta ? ` (${meta})` : ""}`;
+}
+function golsAdversarioLinha(c){ return c.advP > 0 ? `\n🔴 Gols do ${c.adv?.nome || "adversário"}: ${c.advP}` : ""; }
+
+function msgInicio(c){
+  const esc = normalizeEscalacao(c.jogo.escalacaoInicial);
+  const linhas = esc.map(e => {
+    const a = c.atletas.find(x => x.id === e.atletaId);
+    if (!a) return null;
+    return `• ${a.numero != null ? a.numero + " " : ""}${a.nome}${e.posicao ? ` (${e.posicao})` : ""}`;
+  }).filter(Boolean);
+  return `🟢 *COMEÇOU!* ${TEAM.nome} x ${c.adv?.nome || "Adversário"}` +
+    (c.campo?.nome ? `\n📍 ${c.campo.nome}` : "") +
+    (linhas.length ? `\n\n*Escalação inicial:*\n${linhas.join("\n")}` : "");
+}
+function msgGol(c, e){
+  if (!e){ // gol sem autor
+    return `⚽ *GOL do ${TEAM.nome}!*\n\n${placarLinha(c)}`;
+  }
+  if (e.atletaGolId === GOL_CONTRA_ID){
+    return `⚽ *GOL CONTRA do adversário!* (a favor do ${TEAM.nome})` +
+      `${e.minuto != null ? `\n⏱ ${e.minuto}'${e.tempo ? ` do ${e.tempo}` : ""}` : (e.tempo ? `\n⏱ ${e.tempo}` : "")}\n\n${placarLinha(c)}`;
+  }
+  const quando = e.minuto != null ? `${e.minuto}'${e.tempo ? ` do ${e.tempo}` : ""}` : (e.tempo || "");
+  return `⚽ *GOL do ${TEAM.nome}!*\n*${nomeDe(c, e.atletaGolId)}*` +
+    (e.tipoGol ? `\n🎯 ${e.tipoGol}` : "") +
+    (quando ? `\n⏱ ${quando}` : "") +
+    (e.atletaAssistId ? `\n🅰️ Assistência: ${nomeDe(c, e.atletaAssistId)}` : "") +
+    `\n\n${placarLinha(c)}`;
+}
+function msgGolAdversario(c){
+  return `😕 *Gol do ${c.adv?.nome || "adversário"}*\n\n${placarLinha(c)}`;
+}
+function msgFimT1(c){
+  const gols = c.eventos.map(e => linhaGol(c, e, false));
+  return `⏸ *Fim do 1º tempo*\n${placarLinha(c)}\n\n*Gols do ${TEAM.nome}:*\n${gols.length ? gols.join("\n") : "Nenhum gol com autor lançado."}${golsAdversarioLinha(c)}`;
+}
+function msgInicioT2(c){
+  return `▶️ *Começou o 2º tempo!*\n${placarLinha(c)}`;
+}
+function msgFimJogo(c){
+  const res = c.nos > c.advP ? "🏆 Vitória!" : c.nos < c.advP ? "❌ Derrota" : "➖ Empate";
+  const gols = c.eventos.map(e => linhaGol(c, e, true));
+  const cont = {};
+  c.eventos.forEach(e => { if (e.atletaAssistId && e.atletaAssistId !== GOL_CONTRA_ID) cont[e.atletaAssistId] = (cont[e.atletaAssistId] || 0) + 1; });
+  const assists = Object.entries(cont).map(([id, n]) => `${nomeDe(c, id)}${n > 1 ? ` (${n})` : ""}`);
+  return `🏁 *FIM DE JOGO*\n${placarLinha(c)}\n${res}` +
+    `\n\n*Gols do ${TEAM.nome}:*\n${gols.length ? gols.join("\n") : "Nenhum gol com autor lançado."}` +
+    (assists.length ? `\n\n🅰️ *Assistências:* ${assists.join(", ")}` : "") +
+    golsAdversarioLinha(c);
+}
+const urlWhats = (texto) => `https://wa.me/?text=${encodeURIComponent(texto)}`;
+
+// ----------------------------------------------------------------------------
 // Tela
 // ----------------------------------------------------------------------------
 export function renderModoJogo(root, state, jogoId){
@@ -131,6 +212,7 @@ export function renderModoJogo(root, state, jogoId){
   const nosPlacar = jogo.placarNos ?? eventos.length;
   const advPlacar = jogo.placarAdversario ?? 0;
   const nomeAtleta = (id) => id === GOL_CONTRA_ID ? "Gol contra (adversário)" : (atletas.find(a => a.id === id)?.nome || "?");
+  const fila = lerFila(jogoId);
   const relogio = lerRelogio(jogoId);
   const rodando = !!relogio.inicio;
   const semAutor = Math.max(0, nosPlacar - eventos.length);
@@ -185,6 +267,19 @@ export function renderModoJogo(root, state, jogoId){
         ${semAutor > 0 ? `<span class="mj-aviso">${semAutor} gol(s) no placar sem autor</span>` : ""}
       </div>
       ${ultimoDesfazer && ultimoDesfazer.jogoId === jogo.id ? `<button class="mj-desfazer" id="mj-desfazer">↩ Desfazer a última ação</button>` : ""}
+
+      ${fila.length ? `
+      <div class="mj-fila">
+        <div class="mj-fila-titulo">📲 Para enviar no grupo (${fila.length})</div>
+        ${(filaAberta ? fila : fila.slice(-3)).map(m => `
+        <div class="mj-fila-item">
+          <span class="mj-fila-rot">${escapeHtml(m.rotulo)}</span>
+          <a class="btn btn-gold btn-sm" href="${urlWhats(m.texto)}" target="_blank" rel="noopener" data-env="${m.id}">Enviar</a>
+          <button class="btn btn-ghost btn-sm" data-copiar="${m.id}">Copiar</button>
+          <button class="mj-fila-x" data-fila-x="${m.id}" aria-label="Descartar">✕</button>
+        </div>`).join("")}
+        ${fila.length > 3 ? `<button class="mj-btn-link" id="mj-fila-ver">${filaAberta ? "Mostrar só as mais recentes" : `Ver todas (${fila.length})`}</button>` : ""}
+      </div>` : ""}
 
       <div class="mj-sec-titulo">Gols do jogo (${eventos.length})</div>
       ${listaEventos || `<p class="mj-vazio">Nenhum gol lançado ainda.</p>`}
@@ -255,18 +350,39 @@ function ligar(root, state, jogo, atletas){
   const eventos = jogo.golsAssistencias || [];
   const nosPlacar = jogo.placarNos ?? eventos.length;
   const advPlacar = jogo.placarAdversario ?? 0;
+  const ctx = (extra = {}) => ({
+    jogo, atletas,
+    adv: state.adversarios.find(a => a.id === jogo.adversarioId),
+    campo: state.campos.find(c => c.id === jogo.campoId),
+    eventos, nos: nosPlacar, advP: advPlacar, ...extra,
+  });
+
+  // Fila de avisos para o grupo
+  $("#mj-fila-ver", root)?.addEventListener("click", () => { filaAberta = !filaAberta; re(); });
+  $$("[data-env]", root).forEach(a => a.addEventListener("click", () => {
+    const id = a.dataset.env;
+    setTimeout(() => { tirarDaFila(jogo.id, id); re(); }, 500);
+  }));
+  $$("[data-fila-x]", root).forEach(b => b.addEventListener("click", () => { tirarDaFila(jogo.id, b.dataset.filaX); re(); }));
+  $$("[data-copiar]", root).forEach(b => b.addEventListener("click", async () => {
+    const m = lerFila(jogo.id).find(x => x.id === b.dataset.copiar);
+    if (!m) return;
+    try{ await navigator.clipboard.writeText(m.texto); toast("Texto copiado. Cole no WhatsApp.", "ok"); }
+    catch(_){ toast("Não consegui copiar neste aparelho.", "err"); }
+  }));
 
   // Cronômetro e tempos
-  $("#mj-ini-t1", root)?.addEventListener("click", () => { mudarFase(jogo.id, "t1", true); re(); });
+  $("#mj-ini-t1", root)?.addEventListener("click", () => { mudarFase(jogo.id, "t1", true); enfileirar(jogo.id, "Início da partida", msgInicio(ctx())); re(); });
   $("#mj-rel-toggle", root)?.addEventListener("click", () => {
     const r = lerRelogio(jogo.id);
     mudarFase(jogo.id, r.fase, !r.inicio);
     re();
   });
-  $("#mj-fim-t1", root)?.addEventListener("click", () => { mudarFase(jogo.id, "int", false); toast("1º tempo encerrado. Intervalo.", "ok"); re(); });
-  $("#mj-ini-t2", root)?.addEventListener("click", () => { mudarFase(jogo.id, "t2", true); re(); });
+  $("#mj-fim-t1", root)?.addEventListener("click", () => { mudarFase(jogo.id, "int", false); enfileirar(jogo.id, "Fim do 1º tempo", msgFimT1(ctx())); toast("1º tempo encerrado. Intervalo.", "ok"); re(); });
+  $("#mj-ini-t2", root)?.addEventListener("click", () => { mudarFase(jogo.id, "t2", true); enfileirar(jogo.id, "Início do 2º tempo", msgInicioT2(ctx())); re(); });
   $("#mj-fim-jogo", root)?.addEventListener("click", async () => {
     mudarFase(jogo.id, "fim", false);
+    enfileirar(jogo.id, "Fim de jogo", msgFimJogo(ctx()));
     if (jogo.status !== "realizado") await gravar(jogo, { status: "realizado" }, "Jogo encerrado e marcado como realizado.");
     else toast("Jogo encerrado.", "ok");
     re();
@@ -285,7 +401,8 @@ function ligar(root, state, jogo, atletas){
 
   // Gol do adversário (+1 / −1)
   $("#mj-adv-mais", root)?.addEventListener("click", async () => {
-    await gravar(jogo, { ...statusCampos(jogo), placarAdversario: advPlacar + 1 }, "Gol do adversário lançado.");
+    const ok = await gravar(jogo, { ...statusCampos(jogo), placarAdversario: advPlacar + 1 }, "Gol do adversário lançado.");
+    if (ok){ enfileirar(jogo.id, `Gol do adversário (${nosPlacar} x ${advPlacar + 1})`, msgGolAdversario(ctx({ advP: advPlacar + 1 }))); re(); }
   });
   $("#mj-adv-menos", root)?.addEventListener("click", async () => {
     if (advPlacar <= 0) return;
@@ -294,7 +411,8 @@ function ligar(root, state, jogo, atletas){
 
   // Gol nosso sem autor (só mexe no placar)
   $("#mj-sem-autor", root)?.addEventListener("click", async () => {
-    await gravar(jogo, { ...statusCampos(jogo), placarNos: nosPlacar + 1 }, "Gol lançado sem autor.");
+    const ok = await gravar(jogo, { ...statusCampos(jogo), placarNos: nosPlacar + 1 }, "Gol lançado sem autor.");
+    if (ok){ enfileirar(jogo.id, `Gol do nosso time (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1 }), null)); re(); }
   });
 
   // Remover um gol da lista
@@ -338,7 +456,7 @@ function ligar(root, state, jogo, atletas){
         golsAssistencias: [...eventos, novo],
         placarNos: nosPlacar + 1,
       }, "Gol contra lançado.");
-      if (ok){ sheet = null; re(); }
+      if (ok){ enfileirar(jogo.id, `Gol contra do adversário (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1, eventos: [...eventos, novo] }), novo)); sheet = null; re(); }
       return;
     }
     sheet.autor = id; sheet.assist = null; sheet.passo = "assist";
@@ -370,7 +488,7 @@ function ligar(root, state, jogo, atletas){
       golsAssistencias: [...eventos, novo],
       placarNos: nosPlacar + 1,
     }, "Gol lançado!");
-    if (ok){ sheet = null; re(); }
+    if (ok){ enfileirar(jogo.id, `Gol: ${nomeDe(ctx(), autor)} (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1, eventos: [...eventos, novo] }), novo)); sheet = null; re(); }
   });
 }
 
