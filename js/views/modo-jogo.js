@@ -63,11 +63,32 @@ function mudarFase(jogoId, fase, rodar){
   gravarRelogio(jogoId, { fase, acum: decorridoMs(r), inicio: rodar ? Date.now() : null });
 }
 
+let telaLigada = null;
+function manterTelaLigada(){
+  try{
+    if (!("wakeLock" in navigator) || telaLigada) return;
+    navigator.wakeLock.request("screen").then(l => {
+      telaLigada = l;
+      l.addEventListener("release", () => { telaLigada = null; });
+    }).catch(() => {});
+  }catch(_){}
+}
+function soltarTela(){
+  try{ telaLigada?.release(); }catch(_){}
+  telaLigada = null;
+}
+// O celular solta a trava quando o app vai para segundo plano; pega de novo ao voltar.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && relogioTimer && jogoAberto && lerRelogio(jogoAberto).inicio) manterTelaLigada();
+});
+
 function pararTicker(){
   if (relogioTimer){ clearInterval(relogioTimer); relogioTimer = null; }
+  soltarTela();
 }
 function iniciarTicker(jogoId){
-  pararTicker();
+  if (relogioTimer){ clearInterval(relogioTimer); relogioTimer = null; }
+  if (lerRelogio(jogoId).inicio) manterTelaLigada(); else soltarTela();
   relogioTimer = setInterval(() => {
     const el = document.getElementById("mj-relogio");
     if (!el){ pararTicker(); return; }
@@ -92,9 +113,17 @@ async function gravar(jogo, campos, mensagem){
   const antes = {};
   Object.keys(campos).forEach(k => { antes[k] = jogo[k] === undefined ? null : jogo[k]; });
   try{
-    await updateJogoField(jogo.id, campos);
-    ultimoDesfazer = { jogoId: jogo.id, antes };
-    if (mensagem) toast(mensagem, "ok");
+    // Sem sinal no campo, o Firestore guarda a gravação no aparelho e envia
+    // depois — mas a confirmação demora. Não travamos a tela esperando: depois
+    // de 2,5 s seguimos em frente (a tela já mostra o dado gravado localmente).
+    const envio = updateJogoField(jogo.id, campos);
+    const r = await Promise.race([envio.then(() => "ok"), new Promise(res => setTimeout(() => res("lento"), 2500))]);
+    if (r === "lento"){
+      toast("Sem sinal? Salvo no aparelho; envia quando a internet voltar.", "ok");
+      envio.catch(err => toast("Não foi possível salvar: " + (err.message || err), "err"));
+    }
+    ultimoDesfazer = { jogoId: jogo.id, antes, filaId: null };
+    if (mensagem && r === "ok") toast(mensagem, "ok");
     return true;
   }catch(err){
     console.error(err);
@@ -124,7 +153,15 @@ function gravarFila(jogoId, fila){
 function enfileirar(jogoId, rotulo, texto){
   const fila = lerFila(jogoId);
   fila.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), rotulo, texto });
+  const novo = fila[fila.length - 1].id;
   gravarFila(jogoId, fila);
+  return novo;
+}
+// Aviso de gol/placar: se a ação for desfeita, o aviso pendente sai da fila junto.
+function enfileirarGol(jogoId, rotulo, texto){
+  const id = enfileirar(jogoId, rotulo, texto);
+  if (ultimoDesfazer && ultimoDesfazer.jogoId === jogoId) ultimoDesfazer.filaId = id;
+  return id;
 }
 function tirarDaFila(jogoId, id){
   gravarFila(jogoId, lerFila(jogoId).filter(m => m.id !== id));
@@ -244,6 +281,7 @@ export function renderModoJogo(root, state, jogoId){
         </div>
       </div>
 
+      ${relogio.fase === "pre" && normalizeEscalacao(jogo.escalacaoInicial).length === 0 ? `<div class="mj-alerta">⚠️ A escalação inicial ainda não foi lançada, então o aviso de início sairá sem ela. <a href="#jogos/${jogo.id}">Lançar escalação</a></div>` : ""}
       <div class="mj-fase">${FASES[relogio.fase]}${relogio.fase === "t1" || relogio.fase === "t2" ? (rodando ? " · rolando" : " · pausado") : ""}</div>
       <div class="mj-relogio-box">
         <span class="mj-relogio" id="mj-relogio">${textoRelogio(decorridoMs(relogio))}</span>
@@ -402,7 +440,7 @@ function ligar(root, state, jogo, atletas){
   // Gol do adversário (+1 / −1)
   $("#mj-adv-mais", root)?.addEventListener("click", async () => {
     const ok = await gravar(jogo, { ...statusCampos(jogo), placarAdversario: advPlacar + 1 }, "Gol do adversário lançado.");
-    if (ok){ enfileirar(jogo.id, `Gol do adversário (${nosPlacar} x ${advPlacar + 1})`, msgGolAdversario(ctx({ advP: advPlacar + 1 }))); re(); }
+    if (ok){ enfileirarGol(jogo.id, `Gol do adversário (${nosPlacar} x ${advPlacar + 1})`, msgGolAdversario(ctx({ advP: advPlacar + 1 }))); re(); }
   });
   $("#mj-adv-menos", root)?.addEventListener("click", async () => {
     if (advPlacar <= 0) return;
@@ -412,7 +450,7 @@ function ligar(root, state, jogo, atletas){
   // Gol nosso sem autor (só mexe no placar)
   $("#mj-sem-autor", root)?.addEventListener("click", async () => {
     const ok = await gravar(jogo, { ...statusCampos(jogo), placarNos: nosPlacar + 1 }, "Gol lançado sem autor.");
-    if (ok){ enfileirar(jogo.id, `Gol do nosso time (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1 }), null)); re(); }
+    if (ok){ enfileirarGol(jogo.id, `Gol do nosso time (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1 }), null)); re(); }
   });
 
   // Remover um gol da lista
@@ -427,9 +465,9 @@ function ligar(root, state, jogo, atletas){
   // Desfazer a última ação
   $("#mj-desfazer", root)?.addEventListener("click", async () => {
     if (!ultimoDesfazer || ultimoDesfazer.jogoId !== jogo.id) return;
-    const antes = ultimoDesfazer.antes;
+    const { antes, filaId } = ultimoDesfazer;
     const ok = await gravar(jogo, antes, "Ação desfeita.");
-    if (ok) ultimoDesfazer = null;
+    if (ok){ if (filaId) tirarDaFila(jogo.id, filaId); ultimoDesfazer = null; }
     re();
   });
 
@@ -456,7 +494,7 @@ function ligar(root, state, jogo, atletas){
         golsAssistencias: [...eventos, novo],
         placarNos: nosPlacar + 1,
       }, "Gol contra lançado.");
-      if (ok){ enfileirar(jogo.id, `Gol contra do adversário (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1, eventos: [...eventos, novo] }), novo)); sheet = null; re(); }
+      if (ok){ enfileirarGol(jogo.id, `Gol contra do adversário (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1, eventos: [...eventos, novo] }), novo)); sheet = null; re(); }
       return;
     }
     sheet.autor = id; sheet.assist = null; sheet.passo = "assist";
@@ -488,7 +526,7 @@ function ligar(root, state, jogo, atletas){
       golsAssistencias: [...eventos, novo],
       placarNos: nosPlacar + 1,
     }, "Gol lançado!");
-    if (ok){ enfileirar(jogo.id, `Gol: ${nomeDe(ctx(), autor)} (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1, eventos: [...eventos, novo] }), novo)); sheet = null; re(); }
+    if (ok){ enfileirarGol(jogo.id, `Gol: ${nomeDe(ctx(), autor)} (${nosPlacar + 1} x ${advPlacar})`, msgGol(ctx({ nos: nosPlacar + 1, eventos: [...eventos, novo] }), novo)); sheet = null; re(); }
   });
 }
 
