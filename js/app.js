@@ -1,6 +1,6 @@
 import { watchAuth, loginWithGoogle, logout, ehSuperAdmin } from "./auth.js";
 import { listenCollection, listenDoc, lerDocumento } from "./db.js";
-import { $, $$, toast, getTheme, toggleTheme, escapeHtml, formatDate, dataISOLocal } from "./utils.js";
+import { $, $$, toast, getTheme, toggleTheme, escapeHtml, formatDate, dataISOLocal, todayISO } from "./utils.js";
 import { TEAM, resolverTeamId, carregarTime, aplicarMarca, observarTime, usuarioEhDaEquipe } from "./tenant.js";
 import { PLANOS, RECURSO_DA_ROTA, NOMES_RECURSOS, temRecurso, planoMinimo, planoVigente, diasRestantes } from "./planos.js";
 import { CONTATO_WHATSAPP } from "./firebase-config.js";
@@ -259,7 +259,7 @@ function parseHash(){
 
 function atualizarMenu(route){
   // Hubs: o botão do menu fica ativo em qualquer subtela do hub.
-  const CADASTROS_SUBROTAS = new Set(["atletas", "adversarios", "campos", "jogos", "modojogo"]);
+  const CADASTROS_SUBROTAS = new Set(["atletas", "adversarios", "campos", "jogos"]);
   const RELATORIOS_SUBROTAS = new Set(["ranking", "escalacao-ideal", "historico", "extrato", "retrospecto", "premiacoes"]);
   const ativa = CADASTROS_SUBROTAS.has(route) ? "cadastros" : RELATORIOS_SUBROTAS.has(route) ? "relatorios" : route;
   $$(".nav-link[data-route]").forEach(a => a.classList.toggle("active", a.dataset.route === ativa));
@@ -283,6 +283,8 @@ function atualizarVisibilidadeMenu(){
 // os 4 mais usados ficam na barra e o resto vai para o botão "Mais". No
 // computador (menu lateral) isso não tem efeito.
 const PRIORIDADE_MOBILE = ["dashboard", "relatorios", "cadastros", "financeiro", "avaliacao", "configuracoes", "admin"];
+// "Modo jogo" fica sempre dentro do "Mais" no celular (não ocupa lugar na barra).
+const SEMPRE_NO_MAIS = "modojogo";
 const MAX_BARRA_MOBILE = 5;
 
 function fecharMenuMais(){
@@ -293,8 +295,12 @@ function fecharMenuMais(){
 function atualizarMenuMobile(){
   const links = $$(".nav-link[data-route]");
   const rank = (a) => { const i = PRIORIDADE_MOBILE.indexOf(a.dataset.route); return i < 0 ? 99 : i; };
-  const visiveis = links.filter(a => a.style.display !== "none").sort((a, b) => rank(a) - rank(b));
-  const extras = visiveis.length > MAX_BARRA_MOBILE ? visiveis.slice(MAX_BARRA_MOBILE - 1) : [];
+  const todos = links.filter(a => a.style.display !== "none").sort((a, b) => rank(a) - rank(b));
+  const fixo = todos.filter(a => a.dataset.route === SEMPRE_NO_MAIS);
+  const visiveis = todos.filter(a => a.dataset.route !== SEMPRE_NO_MAIS);
+  // Com o "Mais" aparecendo por causa do Modo jogo, a barra tem 4 itens + "Mais".
+  const limite = fixo.length ? MAX_BARRA_MOBILE - 1 : MAX_BARRA_MOBILE;
+  const extras = visiveis.length > limite ? [...visiveis.slice(MAX_BARRA_MOBILE - 1), ...fixo] : fixo;
   links.forEach(a => a.classList.toggle("em-mais", extras.includes(a)));
 
   const btn = $("#btn-mais"), painel = $("#menu-mais");
@@ -311,6 +317,15 @@ function atualizarMenuMobile(){
     painel.appendChild(b);
   });
   if (!extras.length) fecharMenuMais();
+}
+
+function jogoParaModoJogo(){
+  const hoje = todayISO();
+  const jogos = state.jogos.filter(j => j.data);
+  return jogos.find(j => j.data === hoje)
+    || jogos.filter(j => j.status !== "realizado" && j.data > hoje).sort((a, b) => a.data.localeCompare(b.data))[0]
+    || [...jogos].sort((a, b) => b.data.localeCompare(a.data))[0]
+    || null;
 }
 
 function render(){
@@ -355,7 +370,14 @@ function render(){
     else renderJogosList(root, state);
   } else if (route === "modojogo"){
     if (subId) renderModoJogo(root, state, subId);
-    else renderJogosList(root, state);
+    else {
+      // Atalho do menu: abre o jogo de hoje (ou o próximo; na falta, o mais recente).
+      const alvo = jogoParaModoJogo();
+      if (alvo){ location.replace(`#modojogo/${alvo.id}`); return; }
+      toast("Cadastre um jogo para usar o Modo jogo.", "err");
+      location.replace("#jogos");
+      return;
+    }
   } else if (route === "extrato"){ renderExtrato(root, state, subId); }
   else if (route === "presenca"){ renderPresenca(root, state, subId); }
   else {
