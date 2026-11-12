@@ -3,7 +3,7 @@
 // placarNos, placarAdversario), então tudo aparece igual na súmula, no ranking
 // e nos relatórios.
 import { TEAM } from "../tenant.js";
-import { $, $$, escapeHtml, toast, formatDateLong, confirmAction } from "../utils.js";
+import { $, $$, escapeHtml, toast, formatDateLong, confirmAction, todayISO } from "../utils.js";
 import { updateJogoField } from "../db.js";
 import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, normalizeEscalacao } from "../stats.js";
 
@@ -136,7 +136,7 @@ async function gravar(jogo, campos, mensagem){
 
 // Ao lançar a primeira ação de um jogo agendado, ele passa a "realizado"
 // (é assim que ele entra nas estatísticas).
-const statusCampos = (jogo) => jogo.status === "realizado" ? {} : { status: "realizado" };
+const statusCampos = (jogo) => jogo.status === "realizado" ? {} : { status: "realizado", modoJogoEm: Date.now() };
 
 // ----------------------------------------------------------------------------
 // Avisos para o grupo do WhatsApp
@@ -227,6 +227,43 @@ function msgFimJogo(c){
 const urlWhats = (texto) => `https://wa.me/?text=${encodeURIComponent(texto)}`;
 
 // ----------------------------------------------------------------------------
+// Proteção: o Modo jogo só abre jogo AGENDADO — ou o jogo de hoje, que já vira
+// "realizado" no primeiro lançamento mas continua em andamento. Assim um jogo
+// antigo já fechado não é alterado por engano.
+// ----------------------------------------------------------------------------
+// "modoJogoEm" marca quando o Modo jogo começou a lançar o jogo: ele segue
+// liberado por 12 h mesmo que a data cadastrada seja outra (jogo adiado, virada
+// da meia-noite), e depois fecha sozinho.
+const DOZE_HORAS = 12 * 3600 * 1000;
+export function modoJogoLiberado(jogo){
+  if (!jogo) return false;
+  if (jogo.status !== "realizado" || jogo.data === todayISO()) return true;
+  return typeof jogo.modoJogoEm === "number" && Date.now() - jogo.modoJogoEm < DOZE_HORAS;
+}
+
+// Jogo que o atalho do menu abre: o de hoje; senão o próximo agendado; senão o
+// agendado mais recente (data passada que ficou sem atualizar). Nenhum = null.
+export function jogoParaModoJogo(jogos){
+  const hoje = todayISO();
+  const ok = jogos.filter(j => j.data && modoJogoLiberado(j));
+  return ok.find(j => j.data === hoje)
+    || ok.filter(j => j.data > hoje).sort((a, b) => a.data.localeCompare(b.data))[0]
+    || [...ok].sort((a, b) => b.data.localeCompare(a.data))[0]
+    || null;
+}
+
+export function renderSemJogoAgendado(root){
+  pararTicker();
+  root.innerHTML = `
+    <div class="card card-pad" style="max-width:480px; margin:24px auto; text-align:center;">
+      <div style="font-size:34px;">⚽</div>
+      <div class="card-title" style="margin-top:6px;">Sem jogo agendado no momento</div>
+      <p style="font-size:13.5px; color:var(--ink-soft);">O Modo jogo só funciona com um jogo agendado (para não alterar o resultado de um jogo já realizado). Agende um jogo para entrar nesse modo.</p>
+      <a href="#jogos" class="btn btn-gold">Ir para as partidas</a>
+    </div>`;
+}
+
+// ----------------------------------------------------------------------------
 // Tela
 // ----------------------------------------------------------------------------
 export function renderModoJogo(root, state, jogoId){
@@ -238,6 +275,21 @@ export function renderModoJogo(root, state, jogoId){
       <div class="card card-pad" style="text-align:center;">
         <p>${state.falhaLeitura ? "Não foi possível carregar o jogo agora." : "Jogo não encontrado."}</p>
         <a href="#jogos" class="btn btn-primary">Ir para as partidas</a>
+      </div>`;
+    return;
+  }
+
+  if (!modoJogoLiberado(jogo)){
+    pararTicker();
+    root.innerHTML = `
+      <div class="card card-pad" style="max-width:480px; margin:24px auto; text-align:center;">
+        <div style="font-size:34px;">🔒</div>
+        <div class="card-title" style="margin-top:6px;">Este jogo já foi realizado</div>
+        <p style="font-size:13.5px; color:var(--ink-soft);">O Modo jogo só abre jogos agendados (ou o jogo de hoje), para não alterar por engano o resultado de um jogo antigo. Para corrigir este jogo, use a página dele.</p>
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+          <a href="#jogos/${jogo.id}" class="btn btn-primary">Abrir o jogo</a>
+          <a href="#jogos" class="btn btn-ghost">Partidas</a>
+        </div>
       </div>`;
     return;
   }
@@ -421,7 +473,7 @@ function ligar(root, state, jogo, atletas){
   $("#mj-fim-jogo", root)?.addEventListener("click", async () => {
     mudarFase(jogo.id, "fim", false);
     enfileirar(jogo.id, "Fim de jogo", msgFimJogo(ctx()));
-    if (jogo.status !== "realizado") await gravar(jogo, { status: "realizado" }, "Jogo encerrado e marcado como realizado.");
+    if (jogo.status !== "realizado") await gravar(jogo, statusCampos(jogo), "Jogo encerrado e marcado como realizado.");
     else toast("Jogo encerrado.", "ok");
     re();
   });
@@ -473,7 +525,7 @@ function ligar(root, state, jogo, atletas){
 
   // Encerrar
   $("#mj-encerrar", root)?.addEventListener("click", async () => {
-    await gravar(jogo, { status: "realizado" }, "Jogo marcado como realizado.");
+    await gravar(jogo, statusCampos(jogo), "Jogo marcado como realizado.");
   });
 
   // ---- Folha de lançamento ----

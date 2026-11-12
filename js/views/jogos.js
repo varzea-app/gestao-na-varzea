@@ -7,6 +7,7 @@ import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA
 
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
+import { modoJogoLiberado } from "./modo-jogo.js";
 import { MESES } from "../filters.js";
 
 // Esconde um elemento quando o plano do time não inclui o recurso.
@@ -336,7 +337,7 @@ export function renderJogoDetail(root, state, jogoId){
         <h1 style="margin-top:4px;">${TEAM.nomeHtml} vs ${escapeHtml(adv?.nome || "?")}</h1>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-        <button class="btn btn-gold" id="btn-modojogo">⚽ Modo jogo</button>
+        ${modoJogoLiberado(jogo) ? `<button class="btn btn-gold" id="btn-modojogo">⚽ Modo jogo</button>` : ""}
         <button class="btn btn-ghost" id="btn-flyer"${off("flyer")}>Gerar imagem</button>
         <button class="btn btn-ghost" id="btn-presenca-link"${off("presenca")}>Copiar link de presença</button>
         <button class="btn btn-ghost" id="btn-presenca"${off("presenca")}>Ver presença</button>
@@ -391,7 +392,7 @@ export function renderJogoDetail(root, state, jogoId){
 
   $("#btn-edit-jogo").addEventListener("click", () => openJogoForm(state, jogo));
   $("#btn-flyer").addEventListener("click", () => openFlyerModal(state, jogo));
-  $("#btn-modojogo").addEventListener("click", () => { location.hash = `#modojogo/${jogo.id}`; });
+  $("#btn-modojogo")?.addEventListener("click", () => { location.hash = `#modojogo/${jogo.id}`; });
   $("#btn-presenca").addEventListener("click", () => { location.hash = `#presenca/${jogo.id}`; });
   $("#btn-presenca-link").addEventListener("click", async () => {
     try{ await navigator.clipboard.writeText(linkPresenca(jogo.id)); toast("Link de presença copiado.", "ok"); }

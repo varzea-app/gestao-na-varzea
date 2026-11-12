@@ -10,7 +10,7 @@ import { renderRanking } from "./views/ranking.js";
 import { renderEscalacaoIdeal } from "./views/escalacao-ideal.js";
 import { renderHistorico } from "./views/historico.js";
 import { renderJogosList, renderJogoDetail } from "./views/jogos.js";
-import { renderModoJogo } from "./views/modo-jogo.js";
+import { renderModoJogo, renderSemJogoAgendado, jogoParaModoJogo } from "./views/modo-jogo.js";
 import { renderAtletas, renderAdversarios, renderCampos, renderCadastrosHub } from "./views/cadastros.js";
 import { renderAvaliacao } from "./views/avaliacao.js";
 import { renderFinanceiro } from "./views/financeiro.js";
@@ -319,15 +319,6 @@ function atualizarMenuMobile(){
   if (!extras.length) fecharMenuMais();
 }
 
-function jogoParaModoJogo(){
-  const hoje = todayISO();
-  const jogos = state.jogos.filter(j => j.data);
-  return jogos.find(j => j.data === hoje)
-    || jogos.filter(j => j.status !== "realizado" && j.data > hoje).sort((a, b) => a.data.localeCompare(b.data))[0]
-    || [...jogos].sort((a, b) => b.data.localeCompare(a.data))[0]
-    || null;
-}
-
 function render(){
   document.body.classList.toggle("sem-time", modo !== "time");
   const root = $("#view-root");
@@ -371,11 +362,11 @@ function render(){
   } else if (route === "modojogo"){
     if (subId) renderModoJogo(root, state, subId);
     else {
-      // Atalho do menu: abre o jogo de hoje (ou o próximo; na falta, o mais recente).
-      const alvo = jogoParaModoJogo();
+      // Atalho do menu: abre o jogo de hoje (ou o próximo agendado). Sem jogo
+      // agendado, avisa em vez de abrir um jogo já realizado.
+      const alvo = jogoParaModoJogo(state.jogos);
       if (alvo){ location.replace(`#modojogo/${alvo.id}`); return; }
-      toast("Cadastre um jogo para usar o Modo jogo.", "err");
-      location.replace("#jogos");
+      renderSemJogoAgendado(root);
       return;
     }
   } else if (route === "extrato"){ renderExtrato(root, state, subId); }
