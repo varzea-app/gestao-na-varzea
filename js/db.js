@@ -87,6 +87,12 @@ export function listenDoc(name, id, cb){
   });
 }
 
+// Lê um documento uma única vez (sem ficar ouvindo). Devolve { id, ...dados } ou null.
+export async function lerDocumento(name, id){
+  const snap = await getDoc(docRef(name, id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
 // ----------------------------------------------------------------------------
 // Presenças (confirmação de presença por jogo) — coleção pública: qualquer
 // pessoa com o link do jogo pode marcar. Doc id = `${jogoId}_${atletaId}`,

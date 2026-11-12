@@ -68,7 +68,8 @@ service cloud.firestore {
 
     // Lista de times de cada e-mail ("Seus times" na tela inicial).
     match /acessos/{email} {
-      allow read, write: if logado() && emailAtual() == email;
+      // O dono da plataforma também mexe (ao excluir um time, tira o atalho de quem era da equipe).
+      allow read, write: if logado() && (emailAtual() == email || isSuper());
     }
 
     // ------------------------------------------------------------------
@@ -123,7 +124,9 @@ service cloud.firestore {
               && !equipeExiste(t)
               && dadosTime(t).donoEmail == emailAtual()
               && request.resource.data.emails == [emailAtual()]);
-        allow update, delete: if doc == 'equipe'
+        // Excluir o time inteiro: só o dono da plataforma.
+        allow delete: if isSuper();
+        allow update: if doc == 'equipe'
           && isMembro(t)
           && (isSuper() || ativo(t))
           && request.resource.data.keys().hasOnly(['emails'])

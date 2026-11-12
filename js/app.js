@@ -1,5 +1,5 @@
 import { watchAuth, loginWithGoogle, logout, ehSuperAdmin } from "./auth.js";
-import { listenCollection, listenDoc } from "./db.js";
+import { listenCollection, listenDoc, lerDocumento } from "./db.js";
 import { $, $$, toast, getTheme, toggleTheme, escapeHtml, formatDate, dataISOLocal } from "./utils.js";
 import { TEAM, resolverTeamId, carregarTime, aplicarMarca, observarTime, usuarioEhDaEquipe } from "./tenant.js";
 import { PLANOS, RECURSO_DA_ROTA, NOMES_RECURSOS, temRecurso, planoMinimo, planoVigente, diasRestantes } from "./planos.js";
@@ -89,8 +89,14 @@ function saveCache(){
   }catch(err){ /* cheio/indisponível — só perde a otimização */ }
 }
 
+// "Completo" = o app leu todas as coleções do time. Quem abre direto o link de
+// confirmação de presença entra no modo leve (só o que essa tela usa) e vira
+// completo quando navega para qualquer outra tela. Poupa leituras do Firestore.
+let completo = false;
+let paraEscutaLeve = [];
+
 function onDataChange(){
-  if (allLoaded()) saveCache();
+  if (completo && allLoaded()) saveCache();
   render();
 }
 
@@ -101,6 +107,44 @@ function startListeners(){
   listenCollection("jogos", "data", (items) => { state.jogos = items; state.loaded.jogos = true; onDataChange(); });
   listenCollection("financeiro", "data", (items) => { state.financeiro = items; state.loaded.financeiro = true; onDataChange(); });
   listenDoc("configuracoes", "geral", (item) => { state.configFinanceiro = item; state.loaded.configFinanceiro = true; onDataChange(); });
+}
+
+// Modo leve da tela de presença: lê os atletas (a lista de nomes), o jogo do
+// link e, uma vez só, o adversário e o campo desse jogo. Não lê financeiro,
+// configurações nem os outros jogos.
+function startListenersPresenca(jogoId){
+  completo = false;
+  state.loaded = { adversarios: false, campos: false, atletas: false, jogos: false, financeiro: true, configFinanceiro: true };
+  let jogoLido = null;
+  paraEscutaLeve.push(listenCollection("atletas", "nome", (items) => { state.atletas = items; state.loaded.atletas = true; onDataChange(); }));
+  paraEscutaLeve.push(listenDoc("jogos", jogoId, async (jogo) => {
+    const ligacao = jogo ? `${jogo.adversarioId || ""}|${jogo.campoId || ""}` : "";
+    state.jogos = jogo ? [jogo] : [];
+    state.loaded.jogos = true;
+    if (ligacao !== jogoLido){
+      jogoLido = ligacao;
+      const [adv, campo] = await Promise.all([
+        jogo?.adversarioId ? lerDocumento("adversarios", jogo.adversarioId).catch(() => null) : null,
+        jogo?.campoId ? lerDocumento("campos", jogo.campoId).catch(() => null) : null,
+      ]);
+      state.adversarios = adv ? [adv] : [];
+      state.campos = campo ? [campo] : [];
+      state.loaded.adversarios = true; state.loaded.campos = true;
+    }
+    onDataChange();
+  }));
+}
+
+// Saiu da tela de presença: passa a ler tudo, como no app normal.
+function promoverParaCompleto(){
+  if (completo) return;
+  paraEscutaLeve.forEach(f => { try{ f(); }catch(err){ /* ok */ } });
+  paraEscutaLeve = [];
+  completo = true;
+  state.adversarios = []; state.campos = []; state.atletas = []; state.jogos = []; state.financeiro = []; state.configFinanceiro = null;
+  state.loaded = { adversarios: false, campos: false, atletas: false, jogos: false, financeiro: false, configFinanceiro: false };
+  aplicarCache();
+  startListeners();
 }
 
 function aplicarCache(){
@@ -259,7 +303,10 @@ function render(){
   root.classList.toggle("somente-leitura", somenteLeitura());
 }
 
-window.addEventListener("hashchange", render);
+window.addEventListener("hashchange", () => {
+  if (modo === "time" && !completo && parseHash().route !== "presenca") promoverParaCompleto();
+  render();
+});
 
 // ============================================================================
 // Tema claro/escuro e navegação
@@ -342,9 +389,15 @@ async function iniciar(){
       if (ok){
         modo = "time";
         aplicarMarca();
-        aplicarCache();
         observarTime(render);
-        startListeners();
+        const { route: rotaInicial, subId: jogoDoLink } = parseHash();
+        if (rotaInicial === "presenca" && jogoDoLink){
+          startListenersPresenca(jogoDoLink);
+        } else {
+          completo = true;
+          aplicarCache();
+          startListeners();
+        }
       } else {
         try{ localStorage.removeItem("app_ultimo_time"); }catch(err){ /* ok */ }
         avisoInicio = `Não encontramos o time "${resolvido}". Confira o link ou entre com o código correto.`;
