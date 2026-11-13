@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Bom D' Copus — Design Tokens
+   Gestão de Time — Design Tokens
    ========================================================================== */
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
@@ -132,6 +132,9 @@ button{font-family:var(--font-body); cursor:pointer;}
 .nav-link:hover{background:rgba(255,255,255,.08); color:#fff;}
 .nav-link.active{background:var(--gold); color:var(--gold-ink); font-weight:600;}
 .nav-link.active svg{opacity:1;}
+/* "Mais": só existe no celular, quando o menu tem mais itens do que cabem na barra de baixo. */
+.nav-mais{display:none;}
+.menu-mais{display:none;}
 
 .sidebar-footer{margin-top:auto; padding-top:14px; border-top:1px solid rgba(255,255,255,.12);}
 .user-chip{display:flex; align-items:center; gap:8px; padding:6px 8px;}
@@ -486,6 +489,20 @@ tbody tr.clickable{cursor:pointer;}
     text-align:center; white-space:nowrap;
   }
   .nav-link svg{width:19px; height:19px;}
+  .nav-link.em-mais{display:none !important;}
+  .nav-mais.visivel{display:flex;}
+  .menu-mais{
+    position:fixed; right:8px; bottom:calc(70px + env(safe-area-inset-bottom, 0px)); z-index:45;
+    min-width:200px; padding:6px; border-radius:12px; color:#fff;
+    background:linear-gradient(180deg, var(--pitch-dark), var(--pitch-darker));
+    box-shadow:0 8px 28px rgba(0,0,0,.4);
+  }
+  .menu-mais.aberto{display:block;}
+  .menu-mais .nav-link{
+    flex-direction:row; justify-content:flex-start; text-align:left;
+    font-size:14px; padding:12px 12px; min-width:0; gap:10px; margin:0; width:100%;
+  }
+  .menu-mais .nav-link svg{width:18px; height:18px;}
   main#view-root{margin-left:0; padding:70px 16px calc(84px + env(safe-area-inset-bottom, 0px));}
   .sumula{grid-template-columns:1fr auto 1fr;}
   .sumula-side .score{font-size:34px;}
@@ -678,7 +695,7 @@ th.col-ativa, td.col-ativa{ background:rgba(228,182,43,.16); font-weight:700; }
 .mes-bar span{display:block; height:4px; background:var(--gold);}
 .fin-linha{cursor:default !important; flex-wrap:wrap;}
 
-/* Tema escuro: manchetes em amarelo do BDC com texto preto */
+/* Tema escuro: manchetes em destaque do time com texto preto */
 html[data-theme="dark"] .manchete,
 html[data-theme="dark"] .dash-hero{background:var(--gold); color:#171717;}
 html[data-theme="dark"] .manchete-eyebrow,
@@ -694,6 +711,131 @@ html[data-theme="dark"] .manchete .fx-avatar{background:#171717; color:var(--gol
 html[data-theme="dark"] .dash-chip{background:rgba(23,23,23,.14); color:#171717;}
 html[data-theme="dark"] .dash-chip.ok{background:rgba(20,80,31,.25); color:#14501f;}
 html[data-theme="dark"] .dash-chip.mute{color:rgba(23,23,23,.7);}
+
+/* ==========================================================================
+   Multi-time: tela inicial, configurações, painel do dono, faixa de plano
+   ========================================================================== */
+.form-grid > .span-2{grid-column:1 / -1;}
+.form-grid > .form-actions{margin-top:4px;}
+
+/* Sem time aberto: esconde menu e barra do celular */
+body.sem-time .sidebar, body.sem-time .mobile-topbar{display:none !important;}
+body.sem-time main#view-root{margin-left:0; padding:28px 18px 60px; max-width:760px; margin-inline:auto; width:100%;}
+
+.landing-hero{text-align:center; padding:34px 10px 26px;}
+.landing-hero .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:.14em; color:var(--accent); font-weight:700; margin-bottom:6px;}
+.landing-hero h1{font-size:40px; color:var(--heading); margin-bottom:8px;}
+.landing-hero p{color:var(--ink-soft); font-size:15px;}
+.landing-aviso{margin:16px auto 0; max-width:480px; background:var(--danger-bg); color:var(--danger); border-radius:var(--radius-sm); padding:10px 14px; font-size:13px; font-weight:600;}
+.landing-linha{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+.landing-linha input{flex:1; min-width:180px;}
+.landing-contato{display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; padding:10px 0 4px; color:var(--ink-soft); font-size:13px;}
+
+/* Configurações do time */
+.cfg-grid{display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:24px; align-items:start;}
+@media (max-width:760px){ .cfg-grid{grid-template-columns:1fr;} }
+.cfg-presets{display:flex; flex-wrap:wrap; gap:8px;}
+.cor-preset{display:inline-flex; align-items:center; gap:6px; padding:6px 10px 6px 6px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--ink); font-size:12px; font-weight:600; cursor:pointer;}
+.cor-preset:hover{border-color:var(--accent);}
+.cor-preset span{width:16px; height:16px; border-radius:50%; display:inline-block; box-shadow:0 0 0 1px rgba(0,0,0,.15) inset;}
+.cor-preset span + span{margin-left:-10px;}
+.field input[type="color"]{height:40px; padding:3px; width:100%; cursor:pointer;}
+.cfg-preview{border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--card);}
+.cfg-preview-brand{display:flex; align-items:center; gap:10px; padding:14px; background:var(--pitch); color:#fff;}
+.cfg-preview-brand img{width:46px; height:46px; border-radius:50%; object-fit:cover; background:#fff1;}
+.cfg-preview-brand .brand-name{font-weight:800; letter-spacing:.04em; font-size:14px; color:#fff;}
+.cfg-preview-brand .brand-sub{font-size:11px; opacity:.7; color:#fff;}
+.cfg-preview-body{padding:14px;}
+.cfg-email{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px;}
+.cfg-email:last-child{border-bottom:0;}
+
+/* Faixa de plano (teste / vencido) */
+.plano-faixa{background:var(--gold-soft, rgba(228,182,43,.16)); color:var(--ink); border:1px solid var(--gold, #E4B62B); border-radius:var(--radius-sm); padding:9px 14px; font-size:13px; font-weight:600; margin-bottom:16px;}
+.plano-faixa-erro{background:var(--danger-bg); color:var(--danger); border-color:var(--danger);}
+
+/* Plano vencido: esconde os botões de cadastrar/editar/excluir (as regras do
+   Firestore e o db.js também barram a gravação, isto é só para não confundir). */
+.somente-leitura #btn-new, .somente-leitura #btn-new-jogo, .somente-leitura #btn-add-evt,
+.somente-leitura #btn-delete-item, .somente-leitura #btn-delete-jogo, .somente-leitura #btn-dup-jogo,
+.somente-leitura #btn-edit-jogo, .somente-leitura #btn-editar-mensalidade, .somente-leitura #btn-entrada,
+.somente-leitura #btn-saida, .somente-leitura #btn-save-adversario, .somente-leitura #btn-save-avaliacao,
+.somente-leitura #btn-save-campo, .somente-leitura [data-edit-evt], .somente-leitura [data-excluir],
+.somente-leitura [data-remove-evt], .somente-leitura [data-save-escalacao],
+.somente-leitura .btn-excluir-transacao, .somente-leitura .btn-editar-transacao,
+.somente-leitura .btn-cobrar, .somente-leitura .btn-isentar{display:none !important;}
+.plano-faixa a{margin-left:8px; font-weight:700; color:inherit; text-decoration:underline;}
+.venc-ok{color:var(--ink-soft);} .venc-aviso{color:#9a6a00; font-weight:700;} .venc-erro{color:var(--danger); font-weight:700;}
+
+/* ==========================================================================
+   Modo jogo (lançamento ao vivo, pensado para o celular)
+   ========================================================================== */
+.mj{max-width:560px; margin:0 auto; padding-bottom:90px;}
+.mj-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;}
+.mj-voltar{font-size:13px; color:var(--accent); font-weight:600; text-decoration:none;}
+.mj-status{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:3px 9px; border-radius:99px; background:var(--pitch-light); color:var(--ink-soft);}
+.mj-status.ok{background:var(--gold); color:var(--gold-ink);}
+.mj-info{font-size:12.5px; color:var(--ink-soft); margin-bottom:12px;}
+.mj-placar{display:flex; align-items:center; justify-content:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 10px; box-shadow:var(--shadow);}
+.mj-lado{flex:1; text-align:center; min-width:0;}
+.mj-time{font-size:13px; font-weight:700; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mj-num{font-family:var(--font-display); font-size:76px; line-height:1; color:var(--heading); margin-top:4px;}
+.mj-x{font-size:26px; color:var(--ink-faint);}
+.mj-fase{text-align:center; margin-top:14px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-soft);}
+.mj-relogio-box{display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; margin:8px 0;}
+.mj-relogio{font-family:var(--font-display); font-size:30px; letter-spacing:.04em; color:var(--ink);}
+.mj-btn-gol{display:block; width:100%; border:none; border-radius:16px; padding:26px 12px; font-size:21px; font-weight:800; letter-spacing:.02em; background:var(--gold); color:var(--gold-ink); box-shadow:0 4px 0 rgba(0,0,0,.18); cursor:pointer;}
+.mj-btn-gol:active{transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.18);}
+.mj-linha{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;}
+.mj-btn-sec{flex:1; border:2px solid var(--line); background:var(--card); color:var(--ink); border-radius:14px; padding:18px 10px; font-size:16px; font-weight:700; cursor:pointer;}
+.mj-btn-sec.peq{flex:0 0 72px;}
+.mj-btn-sec:disabled{opacity:.4;}
+.mj-btn-sec:active{background:var(--pitch-light);}
+.mj-btn-link{background:none; border:none; color:var(--accent); font-size:13px; font-weight:600; text-decoration:underline; padding:8px 2px; cursor:pointer;}
+.mj-aviso{font-size:12px; color:var(--ink-faint);}
+.mj-desfazer{display:block; width:100%; margin-top:10px; padding:12px; border:1px dashed var(--line); background:transparent; color:var(--ink-soft); border-radius:12px; font-size:14px; font-weight:600; cursor:pointer;}
+.mj-sec-titulo{margin:22px 0 8px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-soft);}
+.mj-vazio{font-size:13px; color:var(--ink-faint);}
+.mj-evt{display:flex; align-items:center; gap:10px; padding:11px 4px; border-bottom:1px solid var(--line);}
+.mj-evt-min{min-width:34px; font-weight:700; color:var(--ink-soft); font-size:13px;}
+.mj-evt-txt{flex:1; font-size:14px; min-width:0;}
+.mj-evt-sub{color:var(--ink-soft); font-size:12px;}
+.mj-evt-del{border:none; background:var(--danger-bg); color:var(--danger); border-radius:8px; width:36px; height:36px; font-size:15px; cursor:pointer;}
+.mj-rodape{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:22px;}
+.mj-nota{font-size:12.5px; color:var(--ink-soft);}
+
+/* Folha inferior (escolha de jogadores) */
+.mj-fundo{position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:120; display:flex; align-items:flex-end; justify-content:center;}
+.mj-sheet{background:var(--card); width:100%; max-width:560px; max-height:92vh; overflow-y:auto; border-radius:20px 20px 0 0; padding:16px 14px calc(18px + env(safe-area-inset-bottom));}
+.mj-sheet-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:17px;}
+.mj-fechar{border:none; background:var(--pitch-light); color:var(--ink); width:38px; height:38px; border-radius:50%; font-size:16px; cursor:pointer;}
+.mj-sub{font-size:13px; color:var(--ink-soft); margin-bottom:8px;}
+.mj-grade{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
+.mj-jog{display:flex; align-items:center; gap:8px; text-align:left; border:2px solid var(--line); background:var(--card); color:var(--ink); border-radius:12px; padding:14px 10px; font-size:15px; font-weight:600; cursor:pointer; min-height:54px;}
+.mj-jog span{overflow:hidden; text-overflow:ellipsis;}
+.mj-jog-n{flex:0 0 auto; min-width:26px; height:26px; border-radius:50%; background:var(--pitch-light); display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;}
+.mj-jog:active{background:var(--pitch-light);}
+.mj-jog.sel{border-color:var(--gold); background:rgba(228,182,43,.18);}
+.mj-jog.contra{width:100%; justify-content:center; border-style:dashed;}
+.mj-sheet-pe{margin-top:6px; text-align:center;}
+.mj-campos{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 0;}
+.mj-campos label{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--ink-soft); font-weight:600;}
+.mj-campos input, .mj-campos select{padding:11px 8px; font-size:16px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); width:100%;}
+.mj-sheet-acoes{display:flex; gap:10px; align-items:stretch; position:sticky; bottom:calc(-18px - env(safe-area-inset-bottom)); background:var(--card); padding:10px 0 calc(18px + env(safe-area-inset-bottom)); margin-bottom:calc(-18px - env(safe-area-inset-bottom)); border-top:1px solid var(--line);}
+.mj-btn-salvar{flex:1; border:none; background:var(--gold); color:var(--gold-ink); border-radius:12px; font-size:16px; font-weight:800; padding:16px 10px; cursor:pointer;}
+
+/* Plano vencido: modo jogo só para consulta */
+.somente-leitura .mj-btn-gol, .somente-leitura .mj-linha, .somente-leitura .mj-desfazer,
+.somente-leitura .mj-evt-del, .somente-leitura #mj-encerrar, .somente-leitura .mj-relogio-box button{display:none !important;}
+@media (min-width:881px){ .mj{padding-bottom:40px;} .mj-fundo{align-items:center;} .mj-sheet{border-radius:20px;} }
+
+/* Avisos para o grupo do WhatsApp */
+.mj-fila{background:var(--pitch-light); border:1px solid var(--line); border-radius:14px; padding:10px 12px; margin:12px 0;}
+.mj-fila-titulo{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); margin-bottom:6px;}
+.mj-fila-item{display:flex; align-items:center; gap:8px; padding:6px 0;}
+.mj-fila-rot{flex:1; font-size:13.5px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mj-fila-x{border:none; background:transparent; color:var(--ink-faint); width:30px; height:30px; font-size:14px; cursor:pointer;}
+.mj-alerta{margin-top:12px; padding:10px 12px; border-radius:12px; background:rgba(228,182,43,.18); border:1px solid var(--gold); font-size:13px; color:var(--ink);}
+.mj-alerta a{font-weight:700; color:var(--accent);}
 
 /* Escalação ideal: banco ao lado do campo */
 .escal-layout{display:grid; grid-template-columns:minmax(0,1fr) 230px; gap:16px; align-items:start;}
