@@ -4,7 +4,7 @@
 import { TEAM } from "../tenant.js";
 import { $, $$, escapeHtml, toast, dataISOLocal } from "../utils.js";
 import { importarEmLote, novoIdDoc } from "../db.js";
-import { CATEGORIAS_ATLETA } from "./cadastros.js";
+import { categoriasAtleta } from "../modalidade.js";
 import { TIPOS_PARTIDA } from "./jogos.js";
 
 const MAX_LINHAS = 500;
@@ -149,7 +149,7 @@ async function montarPlanilha(state, comDados){
     "3) Salve o arquivo (.xlsx) e envie na tela Cadastros → Importar planilha. O app mostra uma PRÉVIA antes de gravar.",
     "",
     "JOGADORES — o nome identifica o jogador. Se já existir um com o mesmo nome, a linha é ignorada (ou atualizada, se você marcar essa opção).",
-    "  • Posição: Goleiro, Zagueiro, Lateral, Volante, Meia, Atacante ou Técnico.",
+    `  • Posição: ${categoriasAtleta().join(", ")}.`,
     "  • Ativo / Direito a voto / Pagante: Sim ou Não. Em branco = Ativo Sim, os outros Não.",
     "  • Paga desde: mês no formato AAAA-MM (ex.: 2026-03). Em branco = desde o início.",
     "",
@@ -167,7 +167,7 @@ async function montarPlanilha(state, comDados){
   const adv = [...state.adversarios].map(a => a.nome).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const campos = [...state.campos].map(c => c.nome).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const colunasLista = [
-    ["Posições", CATEGORIAS_ATLETA], ["Adversários", adv], ["Campos", campos],
+    ["Posições", categoriasAtleta()], ["Adversários", adv], ["Campos", campos],
     ["Tipos de partida", TIPOS_PARTIDA], ["Status", ["Agendado", "Realizado"]], ["Sim/Não", ["Sim", "Não"]],
   ];
   colunasLista.forEach(([titulo, itens], i) => {
@@ -204,7 +204,7 @@ async function montarPlanilha(state, comDados){
   const wj = wb.addWorksheet("Jogadores");
   cabecalho(wj, COLS_JOGADORES, [26, 28, 16, 12, 10, 14, 10, 18, 36]);
   wj.getColumn(8).numFmt = "@";
-  lista(wj, 3, refLista(0, CATEGORIAS_ATLETA.length));
+  lista(wj, 3, refLista(0, categoriasAtleta().length));
   [5, 6, 7].forEach(c => lista(wj, c, refLista(5, 2)));
 
   // --- Partidas
@@ -284,8 +284,8 @@ function lerJogadores(ws, state){
     const posTxt = texto(cel(row, 2));
     let posicao = "";
     if (posTxt){
-      posicao = CATEGORIAS_ATLETA.find(p => norm(p) === norm(posTxt)) || "";
-      if (!posicao) L.erros.push(`posição "${posTxt}" não existe (use ${CATEGORIAS_ATLETA.join(", ")})`);
+      posicao = categoriasAtleta().find(p => norm(p) === norm(posTxt)) || "";
+      if (!posicao) L.erros.push(`posição "${posTxt}" não existe (use ${categoriasAtleta().join(", ")})`);
     }
     const num = lerInteiro(cel(row, 3), "número");
     if (num.erro) L.erros.push(num.erro);

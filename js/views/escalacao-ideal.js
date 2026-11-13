@@ -4,6 +4,7 @@ import { listenPresencas } from "../db.js";
 import { openImagemModal } from "./flyer.js";
 import { mediaNotaAtleta, notasPorPosicao, jogosRealizados, ehJogador } from "../stats.js";
 import { filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
+import { SIGLAS, idModalidade, jogadoresEmCampo, posicoesProximas, posicaoNaModalidade } from "../modalidade.js";
 
 // Cada formação lista as linhas do campo (do ataque para o goleiro) e, para
 // cada linha, as vagas da esquerda para a direita. Cada vaga diz quais posições
@@ -11,7 +12,7 @@ import { filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 // etc. Linhas com `ordenar` misturam volantes e meias; depois de escolhidos,
 // os meias vão para as pontas e os volantes para o centro.
 const ATA = ["Atacante"], MEIO = ["Volante", "Meia"], ZAG = ["Zagueiro"], LAT = ["Lateral"], GOL = ["Goleiro"], SEG = ["Meia", "Atacante"];
-const FORMATIONS = {
+const FORMATIONS_CAMPO = {
   "4-3-3": [
     { label: "Ataque", slots: [ATA, ATA, ATA] },
     { label: "Meio-campo", slots: [MEIO, MEIO, MEIO], ordenar: true },
@@ -45,14 +46,59 @@ const FORMATIONS = {
   ],
 };
 
-// Abreviações usadas no campo (mais legíveis no espaço apertado dos "dots" de jogador).
-export const POSICAO_ABREV = {
-  "Goleiro": "GOL", "Zagueiro": "ZAG", "Lateral": "LAT",
-  "Volante": "VOL", "Meia": "MEI", "Atacante": "ATA",
+// Society (7 jogadores: goleiro + 6 na linha), com as mesmas posições do campo.
+const FORMATIONS_SOCIETY = {
+  "2-3-1": [
+    { label: "Ataque", slots: [ATA] },
+    { label: "Meio-campo", slots: [MEIO, MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [ZAG, ZAG] },
+    { label: "Goleiro", slots: [GOL] },
+  ],
+  "3-2-1": [
+    { label: "Ataque", slots: [ATA] },
+    { label: "Meio-campo", slots: [MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [LAT, ZAG, LAT] },
+    { label: "Goleiro", slots: [GOL] },
+  ],
+  "2-2-2": [
+    { label: "Ataque", slots: [ATA, ATA] },
+    { label: "Meio-campo", slots: [MEIO, MEIO], ordenar: true },
+    { label: "Defesa", slots: [ZAG, ZAG] },
+    { label: "Goleiro", slots: [GOL] },
+  ],
+  "3-1-2": [
+    { label: "Ataque", slots: [ATA, ATA] },
+    { label: "Meio-campo", slots: [MEIO], ordenar: true },
+    { label: "Defesa", slots: [LAT, ZAG, LAT] },
+    { label: "Goleiro", slots: [GOL] },
+  ],
 };
-export const abrevPosicao = (pos) => POSICAO_ABREV[pos] || pos;
 
-let formacaoAtual = "4-3-3";
+// Futsal (5 jogadores: goleiro, fixo, duas alas e pivô).
+const FIXO = ["Fixo"], ALA = ["Ala"], PIVO = ["Pivô"];
+const FORMATIONS_FUTSAL = {
+  "1-2-1": [
+    { label: "Pivô", slots: [PIVO] },
+    { label: "Alas", slots: [ALA, ALA] },
+    { label: "Fixo", slots: [FIXO] },
+    { label: "Goleiro", slots: [GOL] },
+  ],
+  "2-2": [
+    { label: "Ataque", slots: [ALA, PIVO] },
+    { label: "Defesa", slots: [ALA, FIXO] },
+    { label: "Goleiro", slots: [GOL] },
+  ],
+};
+
+function formacoesDaModalidade(){
+  const m = idModalidade();
+  return m === "futsal" ? FORMATIONS_FUTSAL : m === "society" ? FORMATIONS_SOCIETY : FORMATIONS_CAMPO;
+}
+
+// Abreviações usadas no campo (mais legíveis no espaço apertado dos "dots" de jogador).
+export const abrevPosicao = (pos) => SIGLAS[pos] || pos;
+
+let formacaoAtual = "4-3-3"; // ajustada à modalidade ao desenhar a tela
 // Critério da escalação: "jogada" = nota na posição em que o atleta foi escalado
 // nas partidas (com a posição cadastrada como 2º critério); "cadastro" = só a
 // posição cadastrada no elenco, com a nota média geral do atleta.
@@ -67,10 +113,6 @@ let presProx = null; // null = ainda carregando
 let presAssin = "";
 
 // Posições "vizinhas", usadas só no último recurso (jogador fora de posição).
-const POSICOES_PROXIMAS = {
-  Goleiro: [], Zagueiro: ["Lateral", "Volante"], Lateral: ["Zagueiro", "Meia"],
-  Volante: ["Meia", "Zagueiro"], Meia: ["Volante", "Atacante"], Atacante: ["Meia"],
-};
 let filtroAno = "";
 let filtroMes = "";
 const excluidos = new Set();
@@ -310,8 +352,11 @@ export function renderEscalacaoIdeal(root, state){
   const foraDaSimulacao = (a) => soConfirmados && !confirmados.has(a.id);
   const atletasConsiderados = atletasElenco.filter(a => !excluidos.has(a.id) && !foraDaSimulacao(a));
 
-  const notasPos = notasPorPosicao(atletasConsiderados, jogosFiltrados);
-  const linhas = FORMATIONS[formacaoAtual] || FORMATIONS["4-3-3"];
+  const notasPos = notasPorPosicao(atletasConsiderados, jogosFiltrados, posicaoNaModalidade);
+  const formacoes = formacoesDaModalidade();
+  if (!(formacaoAtual in formacoes)) formacaoAtual = Object.keys(formacoes)[0];
+  const linhas = formacoes[formacaoAtual];
+  const nJogadores = jogadoresEmCampo();
 
   // Lista plana de vagas, na ordem do campo (linha a linha, esquerda p/ direita).
   const vagas = [];
@@ -375,12 +420,13 @@ export function renderEscalacaoIdeal(root, state){
   // b) quem tem no cadastro uma posição vizinha (ex: lateral na vaga de zagueiro);
   vagas.forEach((v, vi) => {
     if (atribuido[vi]) return;
-    const viz = new Set(v.pos.flatMap(p => POSICOES_PROXIMAS[p] || []));
+    const proximas = posicoesProximas();
+    const viz = new Set(v.pos.flatMap(p => proximas[p] || []));
     const cand = atletasConsiderados.filter(a => !usados.has(a.id) && viz.has(a.posicao)).sort(porGeral)[0];
     if (cand){ atribuido[vi] = cand.id; usados.add(cand.id); }
   });
   // c) quem restar, pelo melhor desempenho geral. Só fica "Vaga em aberto" se
-  //    houver menos de 11 jogadores.
+  //    houver menos jogadores que vagas.
   const sobrando = atletasConsiderados.filter(a => !usados.has(a.id)).sort(porGeral);
   vagas.forEach((v, vi) => {
     if (atribuido[vi] || sobrando.length === 0) return;
@@ -494,7 +540,7 @@ export function renderEscalacaoIdeal(root, state){
       cadastrada no elenco; e, por último, preenche com quem restar.`
         : `Calculada só pela posição cadastrada no elenco: cada vaga usa os atletas daquela posição com a maior nota
       média geral; se sobrar vaga, preenche com quem restar.`}
-      Só fica vaga em aberto se você selecionar menos de 11 jogadores. Laterais ficam nas pontas da defesa e zagueiros no centro.
+      Só fica vaga em aberto se você selecionar menos de ${nJogadores} jogadores.${idModalidade() === "futsal" ? "" : " Laterais ficam nas pontas da defesa e zagueiros no centro."}
     </p>
     </details>
 
@@ -502,7 +548,7 @@ export function renderEscalacaoIdeal(root, state){
       <div class="field">
         <label>Formação</label>
         <select id="sel-formacao">
-          ${Object.keys(FORMATIONS).map(f => `<option value="${f}" ${f === formacaoAtual ? "selected" : ""}>${f}</option>`).join("")}
+          ${Object.keys(formacoes).map(f => `<option value="${f}" ${f === formacaoAtual ? "selected" : ""}>${f}</option>`).join("")}
         </select>
       </div>
       <div class="field">
@@ -542,7 +588,7 @@ export function renderEscalacaoIdeal(root, state){
       <summary style="cursor:pointer; list-style:none;"><span class="card-title">Jogadores considerados</span> <span class="card-sub" style="margin:0 0 0 8px;">${atletasConsiderados.length} de ${atletasElenco.length} no cálculo — toque para ${consideradosAberto ? "recolher" : "ajustar"}</span></summary>
       <div style="height:10px;"></div>
       <div class="card-sub">${soConfirmados
-        ? `Simulação com quem confirmou presença na próxima partida (${confirmados.size} confirmados${confirmados.size < 11 ? ` — faltam ${11 - confirmados.size} para fechar 11` : ""}). Desmarque quem não quiser considerar.`
+        ? `Simulação com quem confirmou presença na próxima partida (${confirmados.size} confirmados${confirmados.size < nJogadores ? ` — faltam ${nJogadores - confirmados.size} para fechar ${nJogadores}` : ""}). Desmarque quem não quiser considerar.`
         : "Desmarque quem você não quer considerar no cálculo da escalação ideal. Por padrão, todos entram."}</div>
       <div class="player-grid">
         ${atletasElenco.map(a => {

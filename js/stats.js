@@ -179,14 +179,15 @@ export function mediaNotaAtleta(atletaId, jogos, votanteIds = null){
 // de Zagueiro em alguns jogos e de Lateral em outros terá uma média para
 // cada posição. Se a partida não tiver posição informada (jogos antigos),
 // usa a posição de cadastro do atleta como fallback só para não perder o dado.
-export function notasPorPosicao(atletas, jogos){
+export function notasPorPosicao(atletas, jogos, mapearPosicao = null){
   const map = {}; // atletaId -> { posicao -> notas[] }
   jogosRealizados(jogos).forEach(j => {
     Object.keys(j.avaliacoesJogadores || {}).forEach(atletaId => {
       const notas = notasDoAtletaNoJogo(j, atletaId);
       if (notas.length === 0) return;
       const atleta = atletas.find(a => a.id === atletaId);
-      const posicao = posicaoJogadaNoJogo(j, atletaId) || atleta?.posicao || null;
+      let posicao = posicaoJogadaNoJogo(j, atletaId) || atleta?.posicao || null;
+      if (posicao && mapearPosicao) posicao = mapearPosicao(posicao); // ex.: partida antiga de campo, time hoje de futsal
       if (!posicao) return;
       if (!map[atletaId]) map[atletaId] = {};
       if (!map[atletaId][posicao]) map[atletaId][posicao] = [];

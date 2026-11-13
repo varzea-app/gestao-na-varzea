@@ -3,8 +3,8 @@ import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, f
 import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID } from "../stats.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 import { abrevPosicao } from "./escalacao-ideal.js";
+import { ordemPosicao } from "../modalidade.js";
 
-const ORDEM_POSICAO = { "Goleiro": 0, "Zagueiro": 1, "Lateral": 2, "Volante": 3, "Meia": 4, "Atacante": 5 };
 
 let searchHistorico = "";
 let ordemHistorico = "recentes"; // recentes | antigos | nota | saldo
@@ -175,8 +175,8 @@ export function renderHistorico(root, state, subId){
 // quem não tem posição informada (jogos antigos) fica no final, na ordem original.
 function ordenarEntriesPorPosicao(entries){
   return [...entries].sort((a, b) => {
-    const oa = a.posicao in ORDEM_POSICAO ? ORDEM_POSICAO[a.posicao] : 99;
-    const ob = b.posicao in ORDEM_POSICAO ? ORDEM_POSICAO[b.posicao] : 99;
+    const oa = ordemPosicao(a.posicao);
+    const ob = ordemPosicao(b.posicao);
     return oa - ob;
   });
 }

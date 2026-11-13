@@ -1,6 +1,7 @@
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, fmt1, sortRows, sortableTh, wireSortableHeaders, reRenderKeepingFocus } from "../utils.js";
 import { createDoc, saveDoc, removeDoc, setPrivateDoc, getPrivateDoc } from "../db.js";
-import { mediaNotaAtleta, mediaCampo, mediaAdversario, contagemJogosPorCampo, contagemJogosPorAdversario, POSICAO_TECNICO } from "../stats.js";
+import { mediaNotaAtleta, mediaCampo, mediaAdversario, contagemJogosPorCampo, contagemJogosPorAdversario } from "../stats.js";
+import { posicoesDaModalidade, categoriasAtleta, pluralPosicao } from "../modalidade.js";
 
 // ============================================================================
 // Motor genérico de CRUD (usado por Atletas, Adversários e Campos)
@@ -12,7 +13,7 @@ export function fieldHtml(f, item){
   const spanCls = f.span2 ? "field span-2" : "field";
 
   if (f.type === "select"){
-    const opts = f.options.map(o => {
+    const opts = (typeof f.options === "function" ? f.options() : f.options).map(o => {
       const ov = typeof o === "string" ? o : o.value;
       const ol = typeof o === "string" ? o : o.label;
       return `<option value="${escapeHtml(ov)}" ${val === ov ? "selected" : ""}>${escapeHtml(ol)}</option>`;
@@ -295,13 +296,7 @@ function renderCrudView(root, opts, state){
 // Configurações específicas
 // ============================================================================
 
-// Posições de linha — usadas na escalação de partida (posição jogada em campo).
-export const POSICOES = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante"];
-
-// Categorias do cadastro do atleta — inclui "Técnico" além das posições de
-// linha, pra cadastrar comissão técnica. "Técnico" não é uma posição jogada
-// em campo, por isso não entra nas opções de POSICOES (usada na escalação).
-export const CATEGORIAS_ATLETA = [...POSICOES, POSICAO_TECNICO];
+// As posições dependem da modalidade do time (campo, society ou futsal): ver modalidade.js.
 
 // Hub que agrupa Atletas/Adversários/Campos numa tela só — no mobile isso
 // substitui 3 ícones separados no menu inferior por 1 só (evita menu apertado).
@@ -373,10 +368,10 @@ export function renderAtletas(root, state){
     manchete: (items) => {
       const ativos = items.filter(a => a.ativo !== false);
       const por = {};
-      ativos.forEach(a => { if (POSICOES.includes(a.posicao)) por[a.posicao] = (por[a.posicao] || 0) + 1; });
-      const plur = { Goleiro: "goleiros", Zagueiro: "zagueiros", Lateral: "laterais", Volante: "volantes", Meia: "meias", Atacante: "atacantes" };
+      const posicoes = posicoesDaModalidade();
+      ativos.forEach(a => { if (posicoes.includes(a.posicao)) por[a.posicao] = (por[a.posicao] || 0) + 1; });
       const sem = ativos.filter(a => !a.posicao).length;
-      const dist = POSICOES.filter(p => por[p]).map(p => `${por[p]} ${plur[p]}`).join(", ");
+      const dist = posicoes.filter(p => por[p]).map(p => `${por[p]} ${pluralPosicao(p)}`).join(", ");
       return {
         eyebrow: "Elenco",
         titulo: `${ativos.length} atleta${ativos.length === 1 ? "" : "s"} ativo${ativos.length === 1 ? "" : "s"}${items.length > ativos.length ? ` (${items.length - ativos.length} inativo${items.length - ativos.length === 1 ? "" : "s"})` : ""}`,
@@ -387,7 +382,7 @@ export function renderAtletas(root, state){
       { key: "nome", label: "Nome", type: "text", required: true, span2: true },
       { key: "nomeCompleto", label: "Nome completo", type: "text", span2: true },
       { key: "telefone", label: "Telefone", type: "text", placeholder: "(00) 00000-0000", private: true },
-      { key: "posicao", label: "Posição / categoria", type: "select", options: CATEGORIAS_ATLETA, placeholder: "Selecione" },
+      { key: "posicao", label: "Posição / categoria", type: "select", options: categoriasAtleta, placeholder: "Selecione" },
       { key: "numero", label: "Número da camisa", type: "number", min: 0 },
       { key: "cpf", label: "CPF (opcional)", type: "text", placeholder: "000.000.000-00", private: true },
       { key: "dataNascimento", label: "Data de nascimento (opcional)", type: "date", private: true },

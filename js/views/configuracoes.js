@@ -5,6 +5,8 @@ import {
   redimensionarImagem, escudoPadrao, cssDoTema
 } from "../tenant.js";
 import { PLANOS, planoVigente, diasRestantes } from "../planos.js";
+import { MODALIDADES, idModalidade, converterPosicao } from "../modalidade.js";
+import { importarEmLote } from "../db.js";
 import { popularDemonstracao, limparDadosDoTime } from "../demo.js";
 import { COLECOES_BACKUP, NOMES_COLECOES, gerarBackup, baixarJson, lerArquivoBackup, importarBackup } from "../backup.js";
 
@@ -80,6 +82,18 @@ export function renderConfiguracoes(root, state){
         </div>
       </div>
       <div class="form-actions"><button class="btn btn-primary" id="cfg-salvar">Salvar identidade</button></div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="card-title">Modalidade</div>
+      <div class="card-sub">Define as posições do elenco e quantos jogadores entram na escalação: campo (11), society (7) ou futsal (5).</div>
+      <div class="landing-linha">
+        <select id="cfg-modalidade" aria-label="Modalidade">
+          ${Object.values(MODALIDADES).map(m => `<option value="${m.id}" ${m.id === idModalidade() ? "selected" : ""}>${m.nome} — ${m.jogadores} jogadores</option>`).join("")}
+        </select>
+        <button class="btn btn-ghost" id="cfg-salvar-modalidade">Salvar modalidade</button>
+      </div>
+      <div class="card-sub" style="margin-top:8px;">Ao mudar entre campo/society e futsal, as posições dos atletas são convertidas: zagueiro ↔ fixo, lateral ↔ ala, atacante ↔ pivô; volante e meia ficam sem posição no futsal.</div>
     </div>
 
     <div class="card card-pad">
@@ -188,6 +202,39 @@ export function renderConfiguracoes(root, state){
     e.target.disabled = false;
   });
 
+  // ---------------- Modalidade ----------------
+  $("#cfg-salvar-modalidade", root).addEventListener("click", async (e) => {
+    const nova = $("#cfg-modalidade", root).value;
+    const atual = idModalidade();
+    if (nova === atual) return toast("Essa já é a modalidade do time.", "ok");
+    const mudancas = (state.atletas || [])
+      .map(a => ({ a, novo: converterPosicao(a.posicao, atual, nova) }))
+      .filter(x => (x.a.posicao || "") !== x.novo);
+    const semPosicao = mudancas.filter(x => !x.novo).length;
+    const resumo = mudancas.length
+      ? `${mudancas.length} atleta${mudancas.length === 1 ? "" : "s"} ter${mudancas.length === 1 ? "á" : "ão"} a posição convertida` + (semPosicao ? ` (${semPosicao} ficar${semPosicao === 1 ? "á" : "ão"} sem posição)` : "") + "."
+      : "Nenhuma posição de atleta precisa ser convertida.";
+    if (!(await confirmAction(`Mudar a modalidade para ${MODALIDADES[nova].nome} (${MODALIDADES[nova].jogadores} jogadores)? ${resumo} Partidas antigas continuam como estão.`, { title: "Mudar modalidade", confirmLabel: "Mudar", danger: false }))) return;
+    e.target.disabled = true;
+    try{
+      await atualizarTime({ modalidade: nova });
+    }catch(err){
+      console.error(err);
+      toast(err.code === "permission-denied"
+        ? "Sem permissão para mudar a modalidade. Se você é o dono da plataforma, publique as regras novas do Firestore (arquivo firestore.rules)."
+        : "Erro ao salvar: " + err.message, "err");
+      e.target.disabled = false; return;
+    }
+    try{
+      if (mudancas.length) await importarEmLote(mudancas.map(x => ({ colecao: "atletas", id: x.a.id, dados: { posicao: x.novo }, existente: true })));
+      toast("Modalidade atualizada.", "ok");
+    }catch(err){
+      console.error(err);
+      toast("A modalidade mudou, mas não consegui converter as posições dos atletas: " + err.message, "err");
+    }
+    e.target.disabled = false;
+  });
+
   // ---------------- Equipe ----------------
   let emails = [];
   const meuEmail = emailNormalizado(user?.email);
@@ -270,6 +317,7 @@ export function renderConfiguracoes(root, state){
 
   // ---------------- Demonstração (dono) ----------------
   $("#cfg-demo", root)?.addEventListener("click", async (e) => {
+    if (idModalidade() !== "campo") return toast("Os dados de exemplo são de futebol de campo (11). Deixe a modalidade em Campo para usá-los.", "err");
     if (state.atletas.length || state.jogos.length){
       if (!(await confirmAction("Este time já tem dados. Os dados de exemplo serão somados aos existentes. Continuar?"))) return;
     }

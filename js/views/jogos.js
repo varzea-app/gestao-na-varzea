@@ -2,7 +2,8 @@ import { TEAM, hashtags } from "../tenant.js";
 import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatDate, formatDateLong, todayISO, fmt1, ratingWidgetHtml, wireRatingWidgets, reRenderKeepingFocus } from "../utils.js";
 import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas, setPresenca } from "../db.js";
-import { fieldHtml, collectFormData, POSICOES } from "./cadastros.js";
+import { fieldHtml, collectFormData } from "./cadastros.js";
+import { posicoesDaModalidade } from "../modalidade.js";
 import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
 
 import { linkPresenca } from "./presenca.js";
@@ -428,7 +429,7 @@ function renderEscalacaoPanel(jogo, atletas, field, presencas){
   if (disponiveis.length === 0){
     return `<div class="empty-state"><p>Cadastre atletas ativos para montar a escalação.</p></div>`;
   }
-  const posOptions = (selecionada) => POSICOES.map(p =>
+  const posOptions = (selecionada) => posicoesDaModalidade().map(p =>
     `<option value="${p}" ${p === selecionada ? "selected" : ""}>${p}</option>`).join("");
 
   // Com confirmações de presença, a lista mostra só quem confirmou ("vou") e

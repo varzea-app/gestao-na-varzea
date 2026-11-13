@@ -21,6 +21,12 @@ export function formCriarTimeHtml({ ehSuper, email }){
       <div class="field span-2"><label>Nome do time *</label><input type="text" name="nome" required maxlength="40" placeholder="Ex.: Unidos do Bairro"></div>
       <div class="field"><label>Código do time (vira o endereço) *</label><input type="text" name="id" required maxlength="40" placeholder="unidos-do-bairro"></div>
       <div class="field"><label>Sigla (até 3 letras)</label><input type="text" name="sigla" maxlength="3" placeholder="UDB"></div>
+      <div class="field span-2"><label>Modalidade *</label>
+        <select name="modalidade">
+          <option value="campo">Campo — 11 jogadores</option>
+          <option value="society">Society — 7 jogadores</option>
+          <option value="futsal">Futsal — 5 jogadores</option>
+        </select></div>
       <div class="field span-2"><label>E-mail Google de quem vai administrar${ehSuper ? "" : " (o seu)"} *</label>
         <input type="email" name="dono" required value="${escapeHtml(email || "")}" ${ehSuper ? "" : "readonly"}></div>
       <div class="form-actions span-2"><button type="submit" class="btn btn-primary">Criar time</button></div>
@@ -50,7 +56,7 @@ export function ligarFormCriarTime(root, { ehSuper, planoInicial = "teste", aoCr
     btn.disabled = true;
     try{
       if (await timeExiste(id)){ toast("Esse código já está em uso. Escolha outro.", "err"); btn.disabled = false; return; }
-      await criarTime({ id, nome, sigla: campoSigla.value, donoEmail: dono, plano: planoInicial });
+      await criarTime({ id, nome, sigla: campoSigla.value, donoEmail: dono, plano: planoInicial, modalidade: form.elements["modalidade"].value });
       toast("Time criado!", "ok");
       aoCriar(id);
     }catch(err){

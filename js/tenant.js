@@ -42,6 +42,7 @@ export const TEAM = {
   plano: "start",
   validoAte: null,     // Date ou null
   donoEmail: "",
+  modalidade: "campo", // campo (11) | society (7) | futsal (5)
 };
 
 export function hashtags(){
@@ -201,6 +202,7 @@ function preencherTeam(id, d){
     plano: d.plano || "start",
     validoAte: d.validoAte?.toDate ? d.validoAte.toDate() : (d.validoAte ? new Date(d.validoAte) : null),
     donoEmail: d.donoEmail || "",
+    modalidade: ["campo", "society", "futsal"].includes(d.modalidade) ? d.modalidade : "campo",
   });
 }
 
@@ -305,13 +307,15 @@ export async function usuarioEhDaEquipe(user){
 // Criar time e lista "meus times"
 // ----------------------------------------------------------------------------
 
-export async function criarTime({ id, nome, sigla, donoEmail, plano = "teste", validoAte = null, corPrimaria, corDestaque }){
+export async function criarTime({ id, nome, sigla, donoEmail, plano = "teste", validoAte = null, corPrimaria, corDestaque, modalidade = "campo" }){
   const fim = validoAte || new Date(Date.now() + DIAS_DE_TESTE * 86400000);
   const dono = emailNormalizado(donoEmail);
   await setDoc(doc(db, "times", id), {
     nome: nome.trim(), sigla: (sigla || "").trim().toUpperCase(),
     escudo: "", corPrimaria: corPrimaria || COR_PADRAO.primaria, corDestaque: corDestaque || COR_PADRAO.destaque,
     plano, validoAte: Timestamp.fromDate(fim), donoEmail: dono, criadoEm: serverTimestamp(),
+    // "campo" é o padrão: só grava o campo quando é outra modalidade.
+    ...(modalidade && modalidade !== "campo" ? { modalidade } : {}),
   });
   await setDoc(doc(db, "times", id, "privado", "equipe"), { emails: [dono] });
   const eu = auth.currentUser ? emailNormalizado(auth.currentUser.email) : "";

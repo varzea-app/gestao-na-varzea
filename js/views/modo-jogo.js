@@ -5,6 +5,7 @@
 import { TEAM } from "../tenant.js";
 import { $, $$, escapeHtml, toast, formatDateLong, confirmAction, todayISO } from "../utils.js";
 import { updateJogoField } from "../db.js";
+import { ordemPosicao, siglaPosicao } from "../modalidade.js";
 import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, normalizeEscalacao } from "../stats.js";
 
 // ----------------------------------------------------------------------------
@@ -177,9 +178,7 @@ function linhaGol(c, e, detalhado){
 }
 function golsAdversarioLinha(c){ return c.advP > 0 ? `\n🔴 Gols do ${c.adv?.nome || "adversário"}: ${c.advP}` : ""; }
 
-// Escalação do aviso: por posição (GOL, ZAG, LAT, VOL, MEI, ATA), sem número da camisa.
-const SIGLAS_POSICAO = { Goleiro: "GOL", Zagueiro: "ZAG", Lateral: "LAT", Volante: "VOL", Meia: "MEI", Atacante: "ATA" };
-const ORDEM_POSICAO = Object.keys(SIGLAS_POSICAO);
+// Escalação do aviso: por posição (siglas da modalidade do time), sem número da camisa.
 
 function msgInicio(c){
   const esc = normalizeEscalacao(c.jogo.escalacaoInicial);
@@ -187,8 +186,7 @@ function msgInicio(c){
     const a = c.atletas.find(x => x.id === e.atletaId);
     if (!a) return null;
     const pos = e.posicao || a.posicao || "";
-    const ordem = ORDEM_POSICAO.indexOf(pos);
-    return { i, ordem: ordem < 0 ? ORDEM_POSICAO.length : ordem, sigla: SIGLAS_POSICAO[pos] || "---", nome: a.nome };
+    return { i, ordem: ordemPosicao(pos), sigla: pos ? siglaPosicao(pos) : "---", nome: a.nome };
   }).filter(Boolean).sort((x, y) => x.ordem - y.ordem || x.i - y.i);
   const linhas = itens.map(x => `• ${x.sigla} - ${x.nome}`);
   return `🟢 *COMEÇOU!* ${TEAM.nome} x ${c.adv?.nome || "Adversário"}` +

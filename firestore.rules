@@ -54,6 +54,11 @@ service cloud.firestore {
       return dadosTime(t).plano in ['craque', 'teste'];
     }
 
+    // Modalidade do time: campo, society ou futsal (ou sem o campo = campo).
+    function modalidadeValida(d) {
+      return !('modalidade' in d) || d.modalidade in ['campo', 'society', 'futsal'];
+    }
+
     function corValida(c) {
       return c is string && c.matches('^#[0-9a-fA-F]{6}$');
     }
@@ -91,7 +96,8 @@ service cloud.firestore {
             && request.resource.data.plano == 'teste'
             && request.resource.data.validoAte <= request.time + duration.value(31, 'd')
             && request.resource.data.keys().hasOnly(
-                 ['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque', 'plano', 'validoAte', 'donoEmail', 'criadoEm'])
+                 ['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque', 'plano', 'validoAte', 'donoEmail', 'criadoEm', 'modalidade'])
+            && modalidadeValida(request.resource.data)
             && request.resource.data.nome is string
             && request.resource.data.nome.size() > 0
             && request.resource.data.nome.size() <= 40);
@@ -101,7 +107,8 @@ service cloud.firestore {
       allow update: if isSuper()
         || (isMembro(t)
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque'])
+                 .hasOnly(['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque', 'modalidade'])
+            && modalidadeValida(request.resource.data)
             && request.resource.data.nome is string
             && request.resource.data.nome.size() > 0
             && request.resource.data.nome.size() <= 40
