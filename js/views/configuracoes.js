@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, toast, confirmAction, formatDate, dataISOLocal } from "../utils.js";
-import { emailNormalizado } from "../auth.js";
+import { emailNormalizado, ehSuperAdmin } from "../auth.js";
 import {
   TEAM, PRESETS_CORES, atualizarTime, lerEquipe, salvarEquipe, linkDoTime, sairDoTime,
   redimensionarImagem, escudoPadrao, cssDoTema
@@ -194,7 +194,7 @@ export function renderConfiguracoes(root, state){
   function desenharEquipe(){
     $("#cfg-equipe", root).innerHTML = emails.length ? emails.map(em => `
       <div class="cfg-email"><span>${escapeHtml(em)}${em === meuEmail ? " (você)" : ""}</span>
-      ${em === meuEmail && !ehSuper ? "" : `<button class="btn btn-ghost btn-sm" data-rem="${escapeHtml(em)}">Remover</button>`}</div>`).join("")
+      ${(em === meuEmail && !ehSuper) || ehSuperAdmin(em) ? "" : `<button class="btn btn-ghost btn-sm" data-rem="${escapeHtml(em)}">Remover</button>`}</div>`).join("")
       : `<div class="card-sub">Ninguém na equipe ainda.</div>`;
     $$("[data-rem]", root).forEach(b => b.addEventListener("click", async () => {
       if (!(await confirmAction(`Remover ${b.dataset.rem} da equipe?`))) return;
