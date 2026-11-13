@@ -126,10 +126,12 @@ const excluidos = new Set();
 let ordem = null;
 let consideradosAberto = false;
 let selecionadoIdx = null;
+let selecionadoBanco = null; // id do atleta do banco escolhido para entrar
 
 function resetArranjoManual(){
   ordem = null;
   selecionadoIdx = null;
+  selecionadoBanco = null;
 }
 
 // Acha a melhor posição/nota de um atleta dentro do "pool" de posições de
@@ -508,6 +510,10 @@ export function renderEscalacaoIdeal(root, state){
     .filter(x => x.media !== null)
     .sort((a, b) => b.media - a.media);
 
+  // Reservas: considerados que não estão entre os titulares (inclui trocas manuais).
+  const emCampo = new Set((ordem || []).filter(Boolean));
+  const banco = atletasConsiderados.filter(a => !emCampo.has(a.id)).sort(porGeral);
+
   // ---- Manchete: resumo do time montado ----
   const idsTime = (ordem || []).filter(Boolean);
   const mediasTime = idsTime.map(id => geral[id]).filter(m => m !== null && m !== undefined);
@@ -612,11 +618,23 @@ export function renderEscalacaoIdeal(root, state){
     ` : `
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
         <p style="font-size:12px; color:var(--ink-soft); margin:0;">
-          ${selecionadoIdx !== null ? "Agora toque em outro jogador (ou vaga) pra trocar." : "Toque em dois jogadores (ou numa vaga) pra trocar as posições."}
+          ${selecionadoBanco !== null ? "Agora toque no jogador do campo que será substituído." : selecionadoIdx !== null ? "Agora toque em outro jogador do campo, ou num reserva do banco, pra trocar." : "Toque em dois jogadores pra trocar as posições, ou num reserva do banco pra colocá-lo em campo."}
         </p>
         <button class="btn btn-ghost btn-sm" id="btn-reset-arranjo" type="button">↺ Restaurar sugestão automática</button>
       </div>
-      <div class="pitch-board">${linhasHtml}</div>
+      <div class="escal-layout">
+        <div class="pitch-board">${linhasHtml}</div>
+        <aside class="banco-painel">
+          <div class="card-title" style="margin-bottom:2px;">Banco <span style="font-weight:400; color:var(--ink-faint);">(${banco.length})</span></div>
+          <div class="card-sub" style="margin-bottom:10px;">Toque num reserva e depois no titular que ele vai substituir.</div>
+          ${banco.length ? banco.map(a => `
+            <button type="button" class="banco-chip ${selecionadoBanco === a.id ? "selecionado" : ""}" data-banco="${a.id}">
+              <span class="player-num">${a.numero ?? "•"}</span>
+              <span class="banco-nome">${escapeHtml(a.nome)}</span>
+              <small>${escapeHtml(abrevPosicao(a.posicao || ""))}${geral[a.id] != null ? ` · ${fmt1(geral[a.id])}` : ""}</small>
+            </button>`).join("") : `<p style="font-size:12px; color:var(--ink-faint); margin:0;">Todos os jogadores considerados estão em campo.</p>`}
+        </aside>
+      </div>
 
       <div class="card card-pad" style="margin-top:22px;">
         <div class="card-title">Notas médias — jogadores considerados</div>
@@ -665,16 +683,33 @@ export function renderEscalacaoIdeal(root, state){
 
   // Trocar jogadores de posição: toca num jogador (ou vaga) pra selecionar,
   // toca num segundo pra trocar os dois de lugar. Tocar de novo no mesmo cancela.
+  // Também dá pra escolher um reserva do banco e depois o titular que ele substitui
+  // (ou o contrário): o titular substituído vai para o banco.
   $$(".pitch-player[data-slot-idx]", root).forEach(el => {
     el.addEventListener("click", () => {
       const idx = Number(el.dataset.slotIdx);
-      if (selecionadoIdx === null){
+      if (selecionadoBanco !== null){
+        ordem[idx] = selecionadoBanco;
+        selecionadoBanco = null; selecionadoIdx = null;
+      } else if (selecionadoIdx === null){
         selecionadoIdx = idx;
       } else if (selecionadoIdx === idx){
         selecionadoIdx = null;
       } else {
         [ordem[selecionadoIdx], ordem[idx]] = [ordem[idx], ordem[selecionadoIdx]];
         selecionadoIdx = null;
+      }
+      reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state));
+    });
+  });
+  $$(".banco-chip[data-banco]", root).forEach(el => {
+    el.addEventListener("click", () => {
+      const id = el.dataset.banco;
+      if (selecionadoIdx !== null){
+        ordem[selecionadoIdx] = id;
+        selecionadoIdx = null; selecionadoBanco = null;
+      } else {
+        selecionadoBanco = selecionadoBanco === id ? null : id;
       }
       reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state));
     });
