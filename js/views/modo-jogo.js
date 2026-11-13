@@ -177,13 +177,20 @@ function linhaGol(c, e, detalhado){
 }
 function golsAdversarioLinha(c){ return c.advP > 0 ? `\n🔴 Gols do ${c.adv?.nome || "adversário"}: ${c.advP}` : ""; }
 
+// Escalação do aviso: por posição (GOL, ZAG, LAT, VOL, MEI, ATA), sem número da camisa.
+const SIGLAS_POSICAO = { Goleiro: "GOL", Zagueiro: "ZAG", Lateral: "LAT", Volante: "VOL", Meia: "MEI", Atacante: "ATA" };
+const ORDEM_POSICAO = Object.keys(SIGLAS_POSICAO);
+
 function msgInicio(c){
   const esc = normalizeEscalacao(c.jogo.escalacaoInicial);
-  const linhas = esc.map(e => {
+  const itens = esc.map((e, i) => {
     const a = c.atletas.find(x => x.id === e.atletaId);
     if (!a) return null;
-    return `• ${a.numero != null ? a.numero + " " : ""}${a.nome}${e.posicao ? ` (${e.posicao})` : ""}`;
-  }).filter(Boolean);
+    const pos = e.posicao || a.posicao || "";
+    const ordem = ORDEM_POSICAO.indexOf(pos);
+    return { i, ordem: ordem < 0 ? ORDEM_POSICAO.length : ordem, sigla: SIGLAS_POSICAO[pos] || "---", nome: a.nome };
+  }).filter(Boolean).sort((x, y) => x.ordem - y.ordem || x.i - y.i);
+  const linhas = itens.map(x => `• ${x.sigla} - ${x.nome}`);
   return `🟢 *COMEÇOU!* ${TEAM.nome} x ${c.adv?.nome || "Adversário"}` +
     (c.campo?.nome ? `\n📍 ${c.campo.nome}` : "") +
     (linhas.length ? `\n\n*Escalação inicial:*\n${linhas.join("\n")}` : "");
