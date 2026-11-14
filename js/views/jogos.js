@@ -4,7 +4,7 @@ import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatD
 import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas, setPresenca } from "../db.js";
 import { fieldHtml, collectFormData } from "./cadastros.js";
 import { posicoesDaModalidade, idModalidade } from "../modalidade.js";
-import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, agruparConfrontos, rotuloQuadro, idsDaPartida } from "../stats.js";
+import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, agruparConfrontos, rotuloQuadro, idsDaPartida, ordemCronologica } from "../stats.js";
 
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
@@ -213,7 +213,7 @@ export function renderJogosList(root, state){
       nomeCampo(j.campoId).toLowerCase().includes(termo) ||
       (j.tipoPartida || "").toLowerCase().includes(termo));
   const hoje = todayISO();
-  const agendadosTodos = todos.filter(j => j.status !== "realizado").sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+  const agendadosTodos = todos.filter(j => j.status !== "realizado").sort(ordemCronologica);
   const realizadosTodos = todos.filter(j => j.status === "realizado");
   const agendados = filtroStatusJogos === "realizados" ? [] : agendadosTodos.filter(passa);
   const realizados = filtroStatusJogos === "agendados" ? [] : realizadosTodos.filter(passa);
