@@ -1,6 +1,6 @@
 import { escapeHtml, formatDate, fmt1 } from "../utils.js";
 import { jogosRealizados, resultadoJogo, statsPorAtleta, ehJogador } from "../stats.js";
-import { MESES } from "../filters.js";
+import { MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 import { temRecurso, RECURSO_DA_ROTA } from "../planos.js";
 
 // Hub "Relatórios" — abre com a história da temporada em uma manchete e
@@ -19,7 +19,8 @@ const ICONES = {
 function plural(n, um, varios){ return `${n} ${n === 1 ? um : varios}`; }
 
 export function renderRelatoriosHub(root, state){
-  const realizados = jogosRealizados(state.jogos).sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  wireQuadroChips(root, () => renderRelatoriosHub(root, state));
+  const realizados = jogosRealizados(filtrarPorQuadro(state.jogos)).sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   const jogadores = state.atletas.filter(ehJogador);
   const nomeAdv = id => state.adversarios.find(a => a.id === id)?.nome || "?";
 
@@ -103,6 +104,7 @@ export function renderRelatoriosHub(root, state){
         <h1>Relatórios</h1>
       </div>
     </div>
+    ${quadroChipsHtml(state.jogos)}
     ${manchete}
     ${gruposVisiveis.map(g => `
       <div class="dash-section-title" style="margin-top:6px;">${g.titulo}</div>
