@@ -43,6 +43,7 @@ export const TEAM = {
   validoAte: null,     // Date ou null
   donoEmail: "",
   modalidade: "campo", // campo (11) | society (7) | futsal (5)
+  visibilidade: "publica", // publica (qualquer pessoa com o link vê as telas) | equipe (só a equipe logada)
 };
 
 export function hashtags(){
@@ -203,6 +204,7 @@ function preencherTeam(id, d){
     validoAte: d.validoAte?.toDate ? d.validoAte.toDate() : (d.validoAte ? new Date(d.validoAte) : null),
     donoEmail: d.donoEmail || "",
     modalidade: ["campo", "society", "futsal"].includes(d.modalidade) ? d.modalidade : "campo",
+    visibilidade: d.visibilidade === "equipe" ? "equipe" : "publica",
   });
 }
 

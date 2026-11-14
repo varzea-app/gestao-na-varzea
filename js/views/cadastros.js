@@ -86,7 +86,7 @@ function openCrudForm(opts, item){
       <form id="crud-form">
         <div class="form-grid">${fieldsHtml}</div>
         <div class="form-actions" style="justify-content:space-between;">
-          ${isEdit ? `<button type="button" class="btn btn-danger" id="btn-delete-item">Excluir</button>` : `<span></span>`}
+          ${isEdit ? `<span style="display:flex; gap:8px; flex-wrap:wrap;"><button type="button" class="btn btn-danger" id="btn-delete-item">Excluir</button>${opts.anonimizar ? `<button type="button" class="btn btn-ghost" id="btn-anonimizar-item" title="Remove o nome e os dados pessoais, mas mantém as estatísticas">Anonimizar</button>` : ""}</span>` : `<span></span>`}
           <div style="display:flex; gap:8px;">
             <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
             <button type="submit" class="btn btn-primary">Salvar</button>
@@ -119,6 +119,20 @@ function openCrudForm(opts, item){
       btn.disabled = false;
     }
   });
+
+  if (isEdit && opts.anonimizar){
+    $("#btn-anonimizar-item").addEventListener("click", async () => {
+      if (!(await confirmAction(`Anonimizar "${item[opts.fields[0].key] || ""}"? O nome e os dados pessoais (telefone, CPF, nascimento, observações) são apagados; as estatísticas dos jogos continuam, atribuídas a "Ex-atleta". Não dá para desfazer.`, { confirmLabel: "Anonimizar", title: "Anonimizar atleta" }))) return;
+      try{
+        await opts.anonimizar(item);
+        toast("Atleta anonimizado.", "ok");
+        closeModal();
+      }catch(err){
+        console.error(err);
+        toast("Erro ao anonimizar: " + err.message, "err");
+      }
+    });
+  }
 
   if (isEdit){
     $("#btn-delete-item").addEventListener("click", async () => {
@@ -362,6 +376,14 @@ export function renderAtletas(root, state){
   renderCrudView(root, {
     collectionName: "atletas",
     privateCollectionName: "atletas_privado",
+    // LGPD: apaga os dados pessoais e deixa o atleta como "Ex-atleta" (as estatísticas dos jogos continuam).
+    anonimizar: async (a) => {
+      await saveDoc("atletas", a.id, {
+        nome: "Ex-atleta", nomeCompleto: "", observacoes: "", numero: null, ativo: false, podeVotar: false, pagante: false,
+        anonimizado: true,
+      });
+      await removeDoc("atletas_privado", a.id);
+    },
     singular: "Atleta",
     plural: "Atletas",
     columnToggle: true,
@@ -386,6 +408,7 @@ export function renderAtletas(root, state){
       { key: "numero", label: "Número da camisa", type: "number", min: 0 },
       { key: "cpf", label: "CPF (opcional)", type: "text", placeholder: "000.000.000-00", private: true },
       { key: "dataNascimento", label: "Data de nascimento (opcional)", type: "date", private: true },
+      { key: "menorIdade", label: "Menor de 18 anos (exige autorização do responsável)", type: "checkbox", default: false, private: true },
       { key: "ativo", label: "Atleta ativo no elenco", type: "checkbox", default: true },
       { key: "podeVotar", label: "Direito a voto (diretor/capitão)", type: "checkbox", default: false },
       { key: "pagante", label: "Pagante (paga mensalidade)", type: "checkbox", default: false },

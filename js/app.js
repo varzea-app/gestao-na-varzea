@@ -24,6 +24,7 @@ import { renderConfiguracoes } from "./views/configuracoes.js";
 import { renderAdmin } from "./views/admin.js";
 import { renderLanding } from "./views/landing.js";
 import { filtrarPorQuadro } from "./filters.js";
+import { renderPrivacidade, renderTermos, garantirAceite } from "./views/legal.js";
 
 // ============================================================================
 // Estado
@@ -343,6 +344,14 @@ function render(){
   const root = $("#view-root");
   const { route, subId } = parseHash();
 
+  // ----- Páginas legais: abertas a todos, com ou sem time
+  if (route === "privacidade" || route === "termos"){
+    document.body.classList.toggle("sem-time", modo !== "time");
+    if (modo === "time") atualizarMenu(route);
+    (route === "termos" ? renderTermos : renderPrivacidade)(root);
+    return;
+  }
+
   // ----- Sem time aberto: tela inicial ou painel do dono
   if (modo !== "time"){
     if (!authPronto){ root.innerHTML = `<div class="loader">Carregando…</div>`; return; }
@@ -367,6 +376,13 @@ function render(){
   }
 
   if (PROTECTED_ROUTES.has(route) && !state.isAuthorized){
+    if (!authPronto){ root.innerHTML = `<div class="loader">Carregando…</div>`; return; }
+    renderRestricted(root);
+    return;
+  }
+
+  // Time com telas restritas à equipe: visitante só entra na confirmação de presença.
+  if (TEAM.visibilidade === "equipe" && !state.isAuthorized && route !== "presenca"){
     if (!authPronto){ root.innerHTML = `<div class="loader">Carregando…</div>`; return; }
     renderRestricted(root);
     return;
@@ -400,6 +416,7 @@ function render(){
   const faixa = faixaFalhaLeitura() + faixaDoPlano();
   if (faixa) root.insertAdjacentHTML("afterbegin", faixa);
   root.classList.toggle("somente-leitura", somenteLeitura());
+  root.insertAdjacentHTML("beforeend", `<p style="margin:28px 0 8px; font-size:12px; opacity:.7; text-align:center;"><a href="#privacidade">Política de Privacidade</a> · <a href="#termos">Termos de Uso</a></p>`);
 }
 
 window.addEventListener("hashchange", () => {
@@ -538,6 +555,8 @@ async function iniciar(){
     authPronto = true;
     updateAuthUI(user);
     render();
+    // Dirigente (não o dono da plataforma): pede o aceite da política e dos termos.
+    if (state.isAuthorized && !state.ehSuper) garantirAceite(user);
   });
 }
 

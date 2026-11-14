@@ -59,6 +59,10 @@ service cloud.firestore {
       return !('modalidade' in d) || d.modalidade in ['campo', 'society', 'futsal'];
     }
 
+    function visibilidadeValida(d) {
+      return !('visibilidade' in d) || d.visibilidade in ['publica', 'equipe'];
+    }
+
     function corValida(c) {
       return c is string && c.matches('^#[0-9a-fA-F]{6}$');
     }
@@ -107,8 +111,9 @@ service cloud.firestore {
       allow update: if isSuper()
         || (isMembro(t)
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque', 'modalidade'])
+                 .hasOnly(['nome', 'sigla', 'escudo', 'corPrimaria', 'corDestaque', 'modalidade', 'visibilidade'])
             && modalidadeValida(request.resource.data)
+            && visibilidadeValida(request.resource.data)
             && request.resource.data.nome is string
             && request.resource.data.nome.size() > 0
             && request.resource.data.nome.size() <= 40
@@ -133,6 +138,10 @@ service cloud.firestore {
               && request.resource.data.emails == [emailAtual()]);
         // Excluir o time inteiro: só o dono da plataforma.
         allow delete: if isSuper();
+        // Aceite da política e dos termos: cada dirigente grava o seu (aceite-email).
+        allow create, update: if isMembro(t)
+          && doc == ('aceite-' + emailAtual())
+          && request.resource.data.keys().hasOnly(['versao', 'em']);
         allow update: if doc == 'equipe'
           && isMembro(t)
           && (isSuper() || ativo(t))

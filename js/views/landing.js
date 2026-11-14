@@ -94,6 +94,7 @@ export function renderLanding(root, ctx){
       <div class="card card-pad" id="landing-conta"></div>
       <div class="card card-pad" id="landing-criar" style="display:none;"></div>
       ${contato ? `<div class="landing-contato"><span>Quer o app no seu time?</span> ${contato}</div>` : ""}
+      <p style="text-align:center; font-size:12px; opacity:.75;"><a href="#privacidade">Política de Privacidade</a> · <a href="#termos">Termos de Uso</a></p>
     </div>`;
 
   $("#form-entrar-time", root).addEventListener("submit", (e) => {

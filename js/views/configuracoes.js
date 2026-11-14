@@ -117,6 +117,20 @@ export function renderConfiguracoes(root, state){
     </div>
 
     <div class="card card-pad">
+      <div class="card-title">Privacidade e dados (LGPD)</div>
+      <div class="card-sub">Quem pode ver Dashboard, Ranking, Histórico e relatórios com o link do time. Com "só a equipe", visitantes ficam de fora (exceto a confirmação de presença). Se houver atletas menores de 18 anos, prefira a opção restrita, a menos que os responsáveis autorizem a exibição.</div>
+      <div class="landing-linha">
+        <select id="cfg-visibilidade" aria-label="Visibilidade das telas">
+          <option value="publica" ${TEAM.visibilidade !== "equipe" ? "selected" : ""}>Públicas: qualquer pessoa com o link</option>
+          <option value="equipe" ${TEAM.visibilidade === "equipe" ? "selected" : ""}>Só a equipe (login Google)</option>
+        </select>
+        <button class="btn btn-ghost" id="cfg-salvar-visibilidade">Salvar visibilidade</button>
+      </div>
+      <div class="card-sub" style="margin-top:10px;">Direitos dos atletas: para tirar um atleta do app, abra Atletas, clique nele e use <strong>Anonimizar</strong> (mantém as estatísticas sem o nome) ou <strong>Excluir</strong>. O backup abaixo serve para entregar uma cópia dos dados a quem pedir.</div>
+      <div style="margin-top:8px;"><a href="#privacidade">Política de Privacidade</a> · <a href="#termos">Termos de Uso</a></div>
+    </div>
+
+    <div class="card card-pad">
       <div class="card-title">Plano</div>
       <div class="card-sub"><strong>${escapeHtml((PLANOS[TEAM.plano] || PLANOS.start).nome)}</strong> — ${textoPlano}</div>
       ${ehSuper ? `<a class="btn btn-ghost btn-sm" href="#admin">Mudar plano no painel do dono</a>` : ""}
@@ -184,6 +198,19 @@ export function renderConfiguracoes(root, state){
     catch(err){ toast(err.message, "err"); }
   });
   $("#cfg-remover-escudo", root).addEventListener("click", () => { rascunho.escudo = ""; $("#cfg-escudo", root).value = ""; desenharPrevia(); });
+
+  $("#cfg-salvar-visibilidade", root).addEventListener("click", async (e) => {
+    const v = $("#cfg-visibilidade", root).value === "equipe" ? "equipe" : "publica";
+    e.target.disabled = true;
+    try{
+      await atualizarTime({ visibilidade: v });
+      toast(v === "equipe" ? "Telas restritas à equipe." : "Telas públicas.", "ok");
+    }catch(err){
+      console.error(err);
+      toast(err.code === "permission-denied" ? "Sem permissão (regras do Firestore ainda não atualizadas, plano vencido ou conta fora da equipe)." : "Erro ao salvar: " + err.message, "err");
+    }
+    e.target.disabled = false;
+  });
 
   $("#cfg-salvar", root).addEventListener("click", async (e) => {
     const nome = rascunho.nome.trim();
