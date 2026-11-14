@@ -64,6 +64,28 @@ equipe do time não consegue mudar o próprio plano nem a validade.
 Se quiser que dirigentes criem o próprio time (teste grátis de 30 dias), crie no Firestore o
 documento `plataforma/config` com o campo `autoCadastro = true`, ou use a opção no **Painel do dono**.
 
+## App Check (opcional, recomendado quando crescer)
+
+O App Check faz o Firestore atender só pedidos que vêm do app de verdade (no seu
+domínio), barrando scripts e cópias do site. Vem **desligado**; nada muda até você
+preencher a chave. Para ligar, nesta ordem:
+
+1. Em [google.com/recaptcha/admin](https://www.google.com/recaptcha/admin), crie uma
+   chave **reCAPTCHA v3** com o domínio do app (ex.: `SEU-USUARIO.github.io`).
+   Guarde a **chave do site** e a **chave secreta**.
+2. No Firebase: **Build → App Check → Apps → seu app da Web → reCAPTCHA** e cole a
+   **chave secreta**.
+3. Cole a **chave do site** em `APPCHECK_SITE_KEY` (`js/firebase-config.js`) e publique.
+4. Em **App Check → APIs → Cloud Firestore**, deixe em **monitoramento** por 1 a 2
+   semanas e acompanhe a % de pedidos verificados.
+5. Quando perto de 100%, clique em **Aplicar (Enforce)** no Firestore. Antes disso,
+   nada é bloqueado. Quem estiver com versão antiga do app guardada no celular
+   precisa atualizar a página.
+
+Para testar em `localhost`, o app usa um token de depuração: abra o console, copie o
+token que o Firebase imprime e cadastre em **App Check → Apps → Gerenciar tokens de
+depuração**.
+
 ## Testar localmente
 
 ```bash

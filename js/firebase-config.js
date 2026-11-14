@@ -35,3 +35,8 @@ export const DIAS_DE_TESTE = 30;
 // Número de WhatsApp (com DDI e DDD, só dígitos, ex.: "5511999999999") para o
 // botão "Falar no WhatsApp" e o aviso de plano vencido. Deixe "" para ocultar.
 export const CONTATO_WHATSAPP = "5511981503805";
+
+// App Check (proteção contra uso do seu Firestore fora do app). DESLIGADO enquanto
+// estiver "". Para ligar: Firebase → App Check → registrar o app da Web com
+// reCAPTCHA v3, e colar aqui a "chave do site". Veja o passo a passo no README.
+export const APPCHECK_SITE_KEY = "";
