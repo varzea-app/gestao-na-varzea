@@ -3,7 +3,7 @@ import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus, todayISO } from "../utils.js";
 import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo } from "../stats.js";
 import { listenPresencas } from "../db.js";
-import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
+import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 
 function renderQr(containerId, texto){
   const el = document.getElementById(containerId);
@@ -86,8 +86,9 @@ function chaveMes(ref){
 
 
 export function renderDashboard(root, state){
+  wireQuadroChips(root, () => renderDashboard(root, state));
   const filtro = getFiltroPeriodo();
-  const todosRealizados = jogosRealizados(state.jogos);
+  const todosRealizados = jogosRealizados(filtrarPorQuadro(state.jogos));
   const anos = anosDisponiveis(todosRealizados);
   const realizadosFiltrados = filtrarPorPeriodo(todosRealizados, filtro);
 
@@ -169,6 +170,7 @@ export function renderDashboard(root, state){
       </div>
     </div>
 
+    ${quadroChipsHtml(state.jogos)}
     <div class="form-grid" style="margin-bottom:20px; max-width:460px;">
       <div class="field">
         <label>Ano</label>
