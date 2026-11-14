@@ -37,17 +37,18 @@ function tituloPlacar(j, nomeAdvTexto){
 function pararPresenca(){ if (unsubPresenca){ unsubPresenca(); unsubPresenca = null; } }
 
 // Sequência atual a partir dos resultados mais recentes.
-function textoSequencia(recentesDesc){
+function textoSequencia(recentesDesc, porConfronto = false){
+  const un = porConfronto ? "confrontos" : "jogos", ult = porConfronto ? "confronto" : "jogo";
   const res = recentesDesc.map(resultadoJogo);
   const conta = (fn) => { let n = 0; for (const r of res){ if (fn(r)) n++; else break; } return n; };
   const vit = conta(r => r === "vitoria");
   if (vit >= 2) return `${vit} vitórias seguidas`;
   const inv = conta(r => r && r !== "derrota");
-  if (inv >= 2) return `${inv} jogos sem perder`;
+  if (inv >= 2) return `${inv} ${un} sem perder`;
   const sv = conta(r => r && r !== "vitoria");
-  if (res[0] === "derrota") return sv >= 2 ? `${sv} jogos sem vencer` : "Derrota no último jogo";
-  if (res[0] === "vitoria") return "Vitória no último jogo";
-  return res[0] === "empate" ? "Empate no último jogo" : "";
+  if (res[0] === "derrota") return sv >= 2 ? `${sv} ${un} sem vencer` : `Derrota no último ${ult}`;
+  if (res[0] === "vitoria") return `Vitória no último ${ult}`;
+  return res[0] === "empate" ? `Empate no último ${ult}` : "";
 }
 
 function diasAte(dataISO){
@@ -117,7 +118,7 @@ export function renderDashboard(root, state){
   // Forma recente: últimos 10 realizados (sem filtro), do mais antigo ao mais novo.
   const recentesDesc = recentes(todosRealizados).slice(0, 10);
   // No Geral com quadros, a sequência (vitórias seguidas etc.) também é por confronto.
-  const sequencia = textoSequencia(recentesDesc);
+  const sequencia = textoSequencia(recentesDesc, porConfronto);
 
   // Destaque do mês: último mês com notas lançadas.
   const meses = [...new Set(todosRealizados.map(j => (j.data || "").slice(0, 7)).filter(m => m.length === 7))].sort().reverse();
