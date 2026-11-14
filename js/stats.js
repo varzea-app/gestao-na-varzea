@@ -100,6 +100,14 @@ export function rotuloQuadro(jogo){
   return jogo?.quadro === "1" ? "1º quadro" : jogo?.quadro === "2" ? "2º quadro" : "";
 }
 
+// Ordem cronológica de jogos: data, depois horário (sem horário vai por último
+// no dia) e, no empate, o 2º quadro antes do 1º (no futsal o 2º quadro joga primeiro).
+export function ordemCronologica(a, b){
+  return (a.data || "").localeCompare(b.data || "")
+    || (a.horario || "99:99").localeCompare(b.horario || "99:99")
+    || (b.quadro || "").localeCompare(a.quadro || "");
+}
+
 // Agrupa jogos em "confrontos": jogos com quadro, do mesmo dia e contra o mesmo
 // adversário, viram 1 confronto (placares somados). Jogos sem quadro, ou contra
 // adversários diferentes, são confrontos de 1 jogo. Cada confronto traz:
