@@ -226,7 +226,7 @@ export function renderRanking(root, state){
     </div>` : ""}`}
   `;
 
-  $$(".rank-chip", root).forEach(btn => {
+  $$(".rank-chip[data-metric]", root).forEach(btn => {
     btn.addEventListener("click", () => {
       activeMetric = btn.dataset.metric;
       reRenderKeepingFocus(root, () => renderRanking(root, state));
