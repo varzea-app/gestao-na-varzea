@@ -1,7 +1,7 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { $, $$, escapeHtml, formatDate } from "../utils.js";
 import { jogosRealizados, agruparConfrontos } from "../stats.js";
-import { anosDisponiveis } from "../filters.js";
+import { anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 
 // Retrospecto: campanha do time contra cada adversário e em cada campo,
 // com manchete, destaques (freguês, carrasco, melhor campo, maior goleada) e
@@ -32,7 +32,8 @@ function agrupar(jogos, chaveId){
 function plural(n, um, varios){ return `${n} ${n === 1 ? um : varios}`; }
 
 export function renderRetrospecto(root, state){
-  const realizados = jogosRealizados(state.jogos).filter(j => j.placarNos !== null && j.placarNos !== undefined);
+  wireQuadroChips(root, () => renderRetrospecto(root, state));
+  const realizados = jogosRealizados(filtrarPorQuadro(state.jogos)).filter(j => j.placarNos !== null && j.placarNos !== undefined);
   const anos = anosDisponiveis(realizados);
   if (filtroAno && !anos.includes(filtroAno)) filtroAno = "";
   const doAno = realizados.filter(j => !filtroAno || (j.data || "").startsWith(filtroAno));
@@ -125,6 +126,7 @@ export function renderRetrospecto(root, state){
       </div>
     </div>
 
+    ${quadroChipsHtml(state.jogos)}
     ${manchete}
     ${destaques ? `<div class="rt-destaques">${destaques}</div>` : ""}
 
