@@ -1,7 +1,7 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { $, $$, escapeHtml, formatDate } from "../utils.js";
 import { jogosRealizados, agruparConfrontos } from "../stats.js";
-import { anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
+import { anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 
 // Retrospecto: campanha do time contra cada adversário e em cada campo,
 // com manchete, destaques (freguês, carrasco, melhor campo, maior goleada) e
@@ -9,7 +9,7 @@ import { anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } f
 
 let aba = "adversario"; // adversario | campo
 let filtroAno = "";
-let visao = "jogo";     // jogo | confronto (só aparece quando há jogos com quadro)
+let visao = "jogo";     // jogo | confronto — segue o filtro de quadro (Geral = confronto)
 let ordem = "jogos";    // jogos | aproveitamento | saldo | vitorias
 
 function agrupar(jogos, chaveId){
@@ -38,7 +38,7 @@ export function renderRetrospecto(root, state){
   if (filtroAno && !anos.includes(filtroAno)) filtroAno = "";
   const doAno = realizados.filter(j => !filtroAno || (j.data || "").startsWith(filtroAno));
   const temQuadros = realizados.some(j => j.quadro);
-  if (!temQuadros) visao = "jogo";
+  visao = contarPorConfronto(realizados) ? "confronto" : "jogo"; // Geral soma os quadros; 1º/2º quadro contam separado
   // Visão por confronto: cada confronto (quadros do mesmo dia e adversário) vira
   // um "jogo" com o placar somado.
   const jogos = visao === "confronto" && temQuadros
@@ -130,10 +130,6 @@ export function renderRetrospecto(root, state){
     ${manchete}
     ${destaques ? `<div class="rt-destaques">${destaques}</div>` : ""}
 
-    ${temQuadros ? `<div class="rank-chips">
-      <button class="rank-chip ${visao === "jogo" ? "active" : ""}" data-visao="jogo" type="button">Por jogo</button>
-      <button class="rank-chip ${visao === "confronto" ? "active" : ""}" data-visao="confronto" type="button">Por confronto</button>
-    </div>` : ""}
     <div class="rank-chips">
       <button class="rank-chip ${porAdv ? "active" : ""}" data-aba="adversario" type="button">Por adversário</button>
       <button class="rank-chip ${porAdv ? "" : "active"}" data-aba="campo" type="button">Por campo</button>
@@ -162,7 +158,6 @@ export function renderRetrospecto(root, state){
     <p class="field-hint" style="margin-top:10px;">A barrinha mostra vitórias (verde), empates (cinza) e derrotas (vermelho). Aproveitamento = pontos conquistados (3 por vitória, 1 por empate) sobre o total possível. Freguês e carrasco consideram os adversários com mais jogos disputados (3 ou mais, quando houver).</p>
   `;
 
-  $$(".rank-chip[data-visao]", root).forEach(b => b.addEventListener("click", () => { visao = b.dataset.visao; renderRetrospecto(root, state); }));
   $$(".rank-chip[data-aba]", root).forEach(b => b.addEventListener("click", () => { aba = b.dataset.aba; renderRetrospecto(root, state); }));
   $$("[data-sumula]", root).forEach(el => el.addEventListener("click", () => { location.hash = `#historico/${el.dataset.sumula}`; }));
   $("#rt-ano", root).addEventListener("change", (e) => { filtroAno = e.target.value; renderRetrospecto(root, state); });

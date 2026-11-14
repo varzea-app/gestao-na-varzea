@@ -136,6 +136,22 @@ export function agruparConfrontos(jogos){
   });
 }
 
+// Resultados "por confronto": devolve a lista de jogos realizados trocando cada
+// confronto de 2+ quadros por UM jogo com os placares somados (sem pênaltis nem
+// critério, que valem por quadro). Confrontos de 1 jogo ficam como estão. É o que
+// o filtro "Geral" usa para contar vitórias, empates e derrotas.
+export function jogosPorConfronto(realizados){
+  return agruparConfrontos(realizados).map(c => {
+    if (c.jogos.length === 1) return c.jogos[0];
+    return {
+      ...c.jogos[0], id: c.id, quadro: "", status: "realizado",
+      placarNos: c.placarNos, placarAdversario: c.placarAdversario,
+      decisao: "", penaltisNos: null, penaltisAdversario: null, criterioVencedor: "", criterioMotivo: "",
+      jogosOriginais: c.jogos,
+    };
+  });
+}
+
 // Estatísticas combinadas de cada atleta (jogos, gols, assistências, nota
 // média), calculadas a partir de um conjunto de jogos já filtrado (por
 // período ou por partida específica) — usado na tela de Ranking.
@@ -346,10 +362,12 @@ export function desempateJogo(jogo){
   return null;
 }
 
-export function resumoGeral(jogos){
+// porConfronto = true: vitórias/empates/derrotas contam o confronto (soma dos
+// quadros) como 1; qtdJogos continua sendo o total de partidas.
+export function resumoGeral(jogos, porConfronto = false){
   const realizados = jogosRealizados(jogos);
   let vitorias = 0, empates = 0, derrotas = 0;
-  realizados.forEach(j => {
+  (porConfronto ? jogosPorConfronto(realizados) : realizados).forEach(j => {
     const r = resultadoJogo(j);
     if (r === "vitoria") vitorias++;
     else if (r === "empate") empates++;

@@ -1,7 +1,7 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, fmt1, avg, reRenderKeepingFocus, toast } from "../utils.js";
-import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID, agruparConfrontos, rotuloQuadro } from "../stats.js";
-import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
+import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID, agruparConfrontos, rotuloQuadro, jogosPorConfronto } from "../stats.js";
+import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 import { abrevPosicao } from "./escalacao-ideal.js";
 import { ordemPosicao } from "../modalidade.js";
 
@@ -48,7 +48,9 @@ export function renderHistorico(root, state, subId){
   // ---- Manchete do período ----
   const cont = { vitoria: 0, empate: 0, derrota: 0 };
   let gp = 0, gc = 0;
-  realizados.forEach(j => { const r = resultadoJogo(j); if (r) cont[r]++; gp += j.placarNos || 0; gc += j.placarAdversario || 0; });
+  const porConfronto = contarPorConfronto(realizados);
+  (porConfronto ? jogosPorConfronto(realizados) : realizados).forEach(j => { const r = resultadoJogo(j); if (r) cont[r]++; });
+  realizados.forEach(j => { gp += j.placarNos || 0; gc += j.placarAdversario || 0; });
   const goleada = [...realizados].filter(j => saldo(j) > 0).sort((a, b) => saldo(b) - saldo(a) || (b.data || "").localeCompare(a.data || ""))[0];
   const melhorNota = [...realizados].filter(j => nota(j) !== null).sort((a, b) => nota(b) - nota(a))[0];
   const periodoTxt = [filtro.mes ? MESES[Number(filtro.mes) - 1] : "", filtro.ano || ""].filter(Boolean).join(" de ") || "Toda a história";
@@ -95,10 +97,11 @@ export function renderHistorico(root, state, subId){
     });
     corpo = grupos.map(g => {
       const c = { vitoria: 0, empate: 0, derrota: 0 };
-      g.jogos.forEach(j => { const r = resultadoJogo(j); if (r) c[r]++; });
+      const unidadesMes = porConfronto ? jogosPorConfronto(g.jogos) : g.jogos;
+      unidadesMes.forEach(j => { const r = resultadoJogo(j); if (r) c[r]++; });
       const [a, m] = g.chave.split("-").map(Number);
       return `
-        <div class="hist-mes">${MESES[m - 1]} de ${a} <span>${plural(g.jogos.length, "jogo", "jogos")} · ${c.vitoria}V ${c.empate}E ${c.derrota}D</span></div>
+        <div class="hist-mes">${MESES[m - 1]} de ${a} <span>${porConfronto ? plural(unidadesMes.length, "confronto", "confrontos") : plural(g.jogos.length, "jogo", "jogos")} · ${c.vitoria}V ${c.empate}E ${c.derrota}D</span></div>
         ${g.jogos.map(cartao).join("")}`;
     }).join("");
   } else {

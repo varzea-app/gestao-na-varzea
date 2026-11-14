@@ -1,6 +1,6 @@
 import { escapeHtml, formatDate, fmt1 } from "../utils.js";
-import { jogosRealizados, resultadoJogo, statsPorAtleta, ehJogador } from "../stats.js";
-import { MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
+import { jogosRealizados, resultadoJogo, statsPorAtleta, ehJogador, jogosPorConfronto } from "../stats.js";
+import { MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 import { temRecurso, RECURSO_DA_ROTA } from "../planos.js";
 
 // Hub "Relatórios" — abre com a história da temporada em uma manchete e
@@ -27,24 +27,28 @@ export function renderRelatoriosHub(root, state){
   // ---- Manchete da temporada (ano mais recente com jogos) ----
   const ano = realizados[0] ? realizados[0].data.slice(0, 4) : null;
   const doAno = ano ? realizados.filter(j => j.data.startsWith(ano)) : [];
+  // No "Geral" com quadros, vitórias/empates/derrotas contam por confronto (soma dos quadros).
+  const porConfronto = contarPorConfronto(realizados);
+  const unidades = (porConfronto ? jogosPorConfronto(doAno) : doAno).sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const nomeUnidade = porConfronto ? ["confronto", "confrontos"] : ["jogo", "jogos"];
   const cont = { vitoria: 0, empate: 0, derrota: 0 };
   let gp = 0, gc = 0;
-  doAno.forEach(j => {
+  unidades.forEach(j => {
     const r = resultadoJogo(j);
     if (r) cont[r]++;
     gp += j.placarNos || 0; gc += j.placarAdversario || 0;
   });
-  const aprov = doAno.length ? Math.round(((cont.vitoria * 3 + cont.empate) / (doAno.length * 3)) * 100) : 0;
+  const aprov = unidades.length ? Math.round(((cont.vitoria * 3 + cont.empate) / (unidades.length * 3)) * 100) : 0;
   const stAno = statsPorAtleta(jogadores, doAno);
   const artilheiro = [...stAno].sort((a, b) => b.gols - a.gols || b.assistencias - a.assistencias)[0];
-  const ultimo = realizados[0];
+  const ultimo = unidades[0];
   const rUlt = ultimo ? resultadoJogo(ultimo) : null;
   const txtUlt = ultimo ? `${{ vitoria: "Vitória", empate: "Empate", derrota: "Derrota" }[rUlt] || "Jogo"} ${ultimo.placarNos ?? "–"} x ${ultimo.placarAdversario ?? "–"} contra ${nomeAdv(ultimo.adversarioId)} em ${formatDate(ultimo.data)}` : "";
 
   const manchete = doAno.length ? `
     <div class="manchete">
       <div class="manchete-eyebrow">Temporada ${ano}${ano === String(new Date().getFullYear()) ? " até aqui" : ""}</div>
-      <div class="manchete-titulo">${plural(cont.vitoria, "vitória", "vitórias")}, ${plural(cont.empate, "empate", "empates")} e ${plural(cont.derrota, "derrota", "derrotas")} em ${plural(doAno.length, "jogo", "jogos")}</div>
+      <div class="manchete-titulo">${plural(cont.vitoria, "vitória", "vitórias")}, ${plural(cont.empate, "empate", "empates")} e ${plural(cont.derrota, "derrota", "derrotas")} em ${plural(unidades.length, nomeUnidade[0], nomeUnidade[1])}</div>
       <div class="manchete-sub">${plural(gp, "gol marcado", "gols marcados")} e ${gc} sofrido${gc === 1 ? "" : "s"} · aproveitamento de ${aprov}%${artilheiro && artilheiro.gols > 0 ? ` · ${escapeHtml(artilheiro.atleta.nome)} lidera a artilharia com ${artilheiro.gols} gol${artilheiro.gols === 1 ? "" : "s"}` : ""}</div>
       ${txtUlt ? `<div class="manchete-ult">Último jogo: ${escapeHtml(txtUlt)}</div>` : ""}
     </div>` : `
@@ -67,7 +71,7 @@ export function renderRelatoriosHub(root, state){
 
   // Freguês e carrasco: adversários com melhor e pior aproveitamento (mín. 2 jogos).
   const porAdv = {};
-  realizados.forEach(j => {
+  (porConfronto ? jogosPorConfronto(realizados) : realizados).forEach(j => {
     const r = resultadoJogo(j); if (!r) return;
     const x = porAdv[j.adversarioId] = porAdv[j.adversarioId] || { n: 0, pts: 0 };
     x.n++; x.pts += r === "vitoria" ? 3 : r === "empate" ? 1 : 0;

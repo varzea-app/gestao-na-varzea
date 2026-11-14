@@ -1,9 +1,9 @@
 import { TEAM, hashtags, linkDoTime } from "../tenant.js";
 import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus, todayISO } from "../utils.js";
-import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo, ordemCronologica, rotuloQuadro } from "../stats.js";
+import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo, ordemCronologica, rotuloQuadro, jogosPorConfronto } from "../stats.js";
 import { listenPresencas } from "../db.js";
-import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
+import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 
 function renderQr(containerId, texto){
   const el = document.getElementById(containerId);
@@ -92,7 +92,8 @@ export function renderDashboard(root, state){
   const anos = anosDisponiveis(todosRealizados);
   const realizadosFiltrados = filtrarPorPeriodo(todosRealizados, filtro);
 
-  const r = resumoGeral(realizadosFiltrados);
+  const porConfronto = contarPorConfronto(todosRealizados);
+  const r = resumoGeral(realizadosFiltrados, porConfronto);
   const saldo = saldoGols(realizadosFiltrados);
   const pctAssistencia = r.qtdGols > 0 ? Math.round((r.qtdAssistencias / r.qtdGols) * 100) : 0;
   const jogadores = state.atletas.filter(ehJogador);
@@ -113,7 +114,10 @@ export function renderDashboard(root, state){
 
   // Forma recente: últimos 10 realizados (sem filtro), do mais antigo ao mais novo.
   const recentesDesc = [...todosRealizados].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 10);
-  const sequencia = textoSequencia(recentesDesc);
+  // No Geral com quadros, a sequência (vitórias seguidas etc.) também é por confronto.
+  const sequencia = textoSequencia(porConfronto
+    ? jogosPorConfronto(todosRealizados).sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 10)
+    : recentesDesc);
 
   // Destaque do mês: último mês com notas lançadas.
   const meses = [...new Set(todosRealizados.map(j => (j.data || "").slice(0, 7)).filter(m => m.length === 7))].sort().reverse();
@@ -198,7 +202,7 @@ export function renderDashboard(root, state){
       <div class="kpi-tile"><div class="kpi-label">Gols</div><div class="kpi-value">${r.qtdGols}</div></div>
       <div class="kpi-tile"><div class="kpi-label">Saldo de gols</div><div class="kpi-value">${saldo.saldo > 0 ? "+" : ""}${saldo.saldo}</div></div>
       <div class="kpi-tile"><div class="kpi-label">% de assistência</div><div class="kpi-value">${pctAssistencia}<span class="unit">%</span></div></div>
-      <div class="kpi-tile"><div class="kpi-label">Aproveitamento</div><div class="kpi-value small">${r.vitorias}V <span class="unit">${r.empates}E</span> <span class="unit">${r.derrotas}D</span></div></div>
+      <div class="kpi-tile"><div class="kpi-label">Aproveitamento${porConfronto ? " (confrontos)" : ""}</div><div class="kpi-value small">${r.vitorias}V <span class="unit">${r.empates}E</span> <span class="unit">${r.derrotas}D</span></div></div>
       <div class="kpi-tile"><div class="kpi-label">Nota média jogadores</div><div class="kpi-value">${fmt1(r.mediaJogadores)}</div></div>
     </div>
 

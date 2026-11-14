@@ -49,6 +49,13 @@ export function filtrarPorQuadro(jogos){
   return filtroQuadro ? jogos.filter(j => j.quadro === filtroQuadro) : jogos;
 }
 
+// No "Geral" (sem filtrar um quadro) os resultados contam por confronto: os dois
+// quadros do mesmo dia e adversário viram 1 resultado, com os placares somados.
+// Em "1º quadro" / "2º quadro" cada partida conta separada.
+export function contarPorConfronto(jogos){
+  return filtroQuadro === "" && (jogos || []).some(j => j.quadro);
+}
+
 // Chips do filtro; aparecem no futsal ou quando existe algum jogo com quadro.
 export function quadroChipsHtml(jogos){
   if (idModalidade() !== "futsal" && !(jogos || []).some(j => j.quadro)) return "";
