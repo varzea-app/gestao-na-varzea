@@ -1,7 +1,7 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, fmt1, avg, reRenderKeepingFocus, toast } from "../utils.js";
 import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID, agruparConfrontos, rotuloQuadro } from "../stats.js";
-import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
+import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 import { abrevPosicao } from "./escalacao-ideal.js";
 import { ordemPosicao } from "../modalidade.js";
 
@@ -22,8 +22,9 @@ const RES_INFO = {
 function plural(n, um, varios){ return `${n} ${n === 1 ? um : varios}`; }
 
 export function renderHistorico(root, state, subId){
+  wireQuadroChips(root, () => renderHistorico(root, state, subId));
   const filtro = getFiltroPeriodo();
-  const todosRealizados = [...jogosRealizados(state.jogos)].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const todosRealizados = [...jogosRealizados(filtrarPorQuadro(state.jogos))].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   const anos = anosDisponiveis(todosRealizados);
   const doPeriodo = filtrarPorPeriodo(todosRealizados, filtro);
 
@@ -109,6 +110,7 @@ export function renderHistorico(root, state, subId){
       <div><div class="eyebrow">Visão geral</div><h1>Histórico</h1></div>
     </div>
 
+    ${quadroChipsHtml(state.jogos)}
     ${manchete}
 
     <div class="rank-filtros">
