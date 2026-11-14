@@ -1,7 +1,7 @@
 import { TEAM, hashtags, linkDoTime } from "../tenant.js";
 import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus, todayISO } from "../utils.js";
-import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo } from "../stats.js";
+import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo, ordemCronologica, rotuloQuadro } from "../stats.js";
 import { listenPresencas } from "../db.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 
@@ -126,9 +126,10 @@ export function renderDashboard(root, state){
   }
   // Próximos jogos não seguem o filtro de ano/mês — são sempre os agendamentos
   // futuros mais próximos, independente do período usado pra olhar o histórico.
-  const proximosJogos = state.jogos
+  // Segue só o filtro de quadro (Geral / 1º / 2º) e ordena por data e horário.
+  const proximosJogos = filtrarPorQuadro(state.jogos)
     .filter(j => j.status !== "realizado")
-    .sort((a, b) => (a.data || "").localeCompare(b.data || ""))
+    .sort(ordemCronologica)
     .slice(0, 5);
   const hojeISO = todayISO();
   const proximo = proximosJogos.find(j => (j.data || "") >= hojeISO) || proximosJogos[0] || null;
@@ -205,7 +206,7 @@ export function renderDashboard(root, state){
     <div class="dash-top">
       <div class="dash-hero" data-goto="${proximo.id}" style="cursor:pointer;">
         <div class="dash-hero-eyebrow">Próximo jogo · ${textoDias(diasAte(proximo.data))}</div>
-        <div class="dash-hero-title">vs ${nomeAdv(proximo.adversarioId)}</div>
+        <div class="dash-hero-title">vs ${nomeAdv(proximo.adversarioId)}${rotuloQuadro(proximo) ? ` · ${rotuloQuadro(proximo)}` : ""}</div>
         <div class="dash-hero-sub">${formatDate(proximo.data)}${proximo.horario ? ` · ${escapeHtml(proximo.horario)}` : ""} · ${nomeCampo(proximo.campoId)}</div>
         <div class="dash-hero-pres" id="hero-pres"></div>
         ${state.isAuthorized ? `<button class="btn btn-gold btn-sm" id="hero-modojogo" style="margin-top:12px;">⚽ Modo jogo</button>` : ""}
