@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, formatDate, toast, fmt1, avg } from "../utils.js";
-import { jogosRealizados, jogadoresDaPartida, posicaoJogadaNoJogo, notaDoVotanteNoJogo, notasDoAtletaNoJogo } from "../stats.js";
+import { jogosRealizados, jogadoresDaPartida, rotuloQuadro, posicaoJogadaNoJogo, notaDoVotanteNoJogo, notasDoAtletaNoJogo } from "../stats.js";
 import { updateJogoField } from "../db.js";
 
 let votanteId = "";
@@ -42,7 +42,7 @@ export function renderAvaliacao(root, state){
       const f = faltam(j, state.atletas, votanteId);
       extra = f > 0 ? ` · faltam ${f}` : " · completa";
     }
-    return `<option value="${j.id}" ${j.id === jogoId ? "selected" : ""}>${formatDate(j.data)} — vs ${nomeAdv(j.adversarioId)}${extra}</option>`;
+    return `<option value="${j.id}" ${j.id === jogoId ? "selected" : ""}>${formatDate(j.data)} — vs ${nomeAdv(j.adversarioId)}${rotuloQuadro(j) ? ` (${rotuloQuadro(j)})` : ""}${extra}</option>`;
   };
 
   // Gols/assistências de cada jogador na partida (contexto pra quem vota).
@@ -57,7 +57,7 @@ export function renderAvaliacao(root, state){
   const manchete = votanteAtual && jogo && jogadoresParaAvaliar.length ? `
     <div class="manchete">
       <div class="manchete-eyebrow">Avaliação de ${escapeHtml(votanteAtual.nome)}</div>
-      <div class="manchete-titulo">vs ${nomeAdv(jogo.adversarioId)} · ${jogo.placarNos ?? "–"} x ${jogo.placarAdversario ?? "–"}</div>
+      <div class="manchete-titulo">vs ${nomeAdv(jogo.adversarioId)}${rotuloQuadro(jogo) ? ` (${rotuloQuadro(jogo)})` : ""} · ${jogo.placarNos ?? "–"} x ${jogo.placarAdversario ?? "–"}</div>
       <div class="manchete-sub"><span id="av-progresso">${avaliados} de ${jogadoresParaAvaliar.length} jogadores avaliados</span> · ${formatDate(jogo.data)}${pendentesTotal > 1 ? ` · você ainda tem ${pendentesTotal} partidas com notas pendentes` : ""}</div>
       <div class="av-barra"><span id="av-barra-fill" style="width:${Math.round(avaliados / jogadoresParaAvaliar.length * 100)}%"></span></div>
     </div>` : "";
@@ -99,7 +99,7 @@ export function renderAvaliacao(root, state){
         ` : !jogoId ? `
           <div class="empty-state"><p>${pendentesTotal === 0 ? "Você está em dia: todas as partidas já têm suas notas." : "Selecione a partida para ver os jogadores escalados."}</p></div>
         ` : jogadores.length === 0 ? `
-          <div class="empty-state"><h3>Sem escalação</h3><p>Essa partida ainda não tem jogadores na escalação inicial ou final.</p></div>
+          <div class="empty-state"><h3>Sem escalação</h3><p>Essa partida ainda não tem jogadores relacionados nem na escalação inicial ou final.</p></div>
         ` : jogadoresParaAvaliar.length === 0 ? `
           <div class="empty-state"><h3>Nada pra avaliar aqui</h3><p>Você é o único jogador escalado nessa partida, e não é possível avaliar a si próprio.</p></div>
         ` : `
