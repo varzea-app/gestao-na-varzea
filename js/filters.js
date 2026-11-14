@@ -1,3 +1,5 @@
+import { idModalidade } from "./modalidade.js";
+
 // Filtro de período (ano/mês) compartilhado entre Dashboard e Histórico.
 // É um estado simples em memória (não React, sem pub/sub): como só uma tela
 // fica montada por vez nessa SPA, mudar o filtro numa tela e navegar para a
@@ -47,9 +49,9 @@ export function filtrarPorQuadro(jogos){
   return filtroQuadro ? jogos.filter(j => j.quadro === filtroQuadro) : jogos;
 }
 
-// Chips do filtro; só aparecem quando existe algum jogo com quadro.
+// Chips do filtro; aparecem no futsal ou quando existe algum jogo com quadro.
 export function quadroChipsHtml(jogos){
-  if (!(jogos || []).some(j => j.quadro)) return "";
+  if (idModalidade() !== "futsal" && !(jogos || []).some(j => j.quadro)) return "";
   const itens = [["", "Geral"], ["1", "1º quadro"], ["2", "2º quadro"]];
   return `<div class="rank-chips quadro-chips">${itens.map(([v, l]) =>
     `<button class="rank-chip ${filtroQuadro === v ? "active" : ""}" data-quadro="${v}" type="button">${l}</button>`).join("")}</div>`;
