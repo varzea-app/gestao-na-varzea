@@ -422,7 +422,7 @@ export function renderJogoDetail(root, state, jogoId){
         <h1 style="margin-top:4px;">${TEAM.nomeHtml}${rotuloQuadro(jogo) ? ` (${rotuloQuadro(jogo)})` : ""} vs ${escapeHtml(adv?.nome || "?")}</h1>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-        ${modoJogoLiberado(jogo) ? `<button class="btn btn-gold" id="btn-modojogo">⚽ Modo jogo</button>` : ""}
+        ${jogo.status !== "realizado" && modoJogoLiberado(jogo) ? `<button class="btn btn-gold" id="btn-modojogo">⚽ Modo jogo</button>` : ""}
         <button class="btn btn-ghost" id="btn-flyer"${off("flyer")}>Gerar imagem</button>
         <button class="btn btn-ghost" id="btn-presenca-link"${off("presenca")}>Copiar link de presença</button>
         <button class="btn btn-ghost" id="btn-presenca"${off("presenca")}>Ver presença</button>
