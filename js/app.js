@@ -416,7 +416,7 @@ function render(){
   const faixa = faixaFalhaLeitura() + faixaDoPlano();
   if (faixa) root.insertAdjacentHTML("afterbegin", faixa);
   root.classList.toggle("somente-leitura", somenteLeitura());
-  root.insertAdjacentHTML("beforeend", `<p style="margin:28px 0 8px; font-size:12px; opacity:.7; text-align:center;"><a href="#privacidade">Política de Privacidade</a> · <a href="#termos">Termos de Uso</a></p>`);
+  root.insertAdjacentHTML("beforeend", `<p style="margin:28px 0 8px; font-size:12px; opacity:.7; text-align:center;"><a href="#privacidade">Política de Privacidade</a> · <a href="#termos">Termos de Uso</a><br>© 2026 Lucas Nascimento. Todos os direitos reservados.</p>`);
 }
 
 window.addEventListener("hashchange", () => {

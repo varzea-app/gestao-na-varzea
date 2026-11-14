@@ -118,16 +118,19 @@ export function renderTermos(root){
     ${h("5. Uso proibido")}
     <p>Tentar acessar dados de outros times, burlar limites ou regras de segurança, sobrecarregar o serviço, ou usá-lo para fins ilegais. Podemos suspender times que descumprirem estes termos.</p>
 
-    ${h("6. Encerramento")}
+    ${h("6. Propriedade intelectual")}
+    <p>O código-fonte, o design, as telas, os textos, a marca e o nome <strong>${escapeHtml(APP_NOME)}</strong> pertencem a Lucas Nascimento e são protegidos pela legislação de direitos autorais (Lei 9.610/98) e de programas de computador (Lei 9.609/98). O uso do app não transfere nenhum desses direitos. É proibido copiar, reproduzir, modificar, descompilar, revender ou criar obras derivadas do app sem autorização por escrito. Os dados, nomes, escudos e imagens cadastrados pelo time continuam sendo do próprio time.</p>
+
+    ${h("7. Encerramento")}
     <p>O time pode pedir a exclusão a qualquer momento, e baixar um backup antes. Podemos encerrar o serviço mediante aviso razoável.</p>
 
-    ${h("7. Limitação de responsabilidade")}
+    ${h("8. Limitação de responsabilidade")}
     <p>O app é fornecido "como está". Na medida permitida por lei, não respondemos por perdas indiretas, por decisões tomadas com base em estatísticas e notas, nem por dados lançados incorretamente pela equipe.</p>
 
-    ${h("8. Lei e foro")}
+    ${h("9. Lei e foro")}
     <p>Lei brasileira. Fica eleito o foro do domicílio do consumidor, quando aplicável, ou o da comarca de São Paulo/SP.</p>
 
-    ${h("9. Contato")}
+    ${h("10. Contato")}
     <p>${contato()}.</p>
   `);
 }

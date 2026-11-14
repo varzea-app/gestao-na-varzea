@@ -103,3 +103,6 @@ js/views/*.js           uma tela por arquivo (landing, configuracoes e admin sã
 - O e-mail do administrador de cada time fica no documento do time, que é de leitura pública (qualquer um com o link consegue ler).
 - Cobrança é manual (Pix) por enquanto: você acompanha a validade no Painel do dono.
 - Informe aos times que dados de atletas (nome, posição, CPF/nascimento opcionais) são tratados conforme a LGPD; CPF e nascimento ficam em coleção privada, nunca públicas.
+
+---
+© 2026 Lucas Nascimento. Todos os direitos reservados. Veja o arquivo `LICENSE`.
