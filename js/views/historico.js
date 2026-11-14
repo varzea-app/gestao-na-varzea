@@ -83,7 +83,7 @@ export function renderHistorico(root, state, subId){
         <div class="hist-info">
           <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}${j.jogosOriginais ? ` <span class="badge badge-pending">confronto · ${j.jogosOriginais.length} quadros</span>` : (rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : "")}</div>
           <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId))}${desempateJogo(j) ? ` · ${escapeHtml(desempateJogo(j).texto)}` : ""}</div>
-          ${j.jogosOriginais ? `<div class="hist-meta">${j.jogosOriginais.map(o => `<span class="hist-quadro" data-jogo="${o.id}" style="text-decoration:underline dotted;cursor:pointer">${rotuloQuadro(o) || "Jogo"} ${o.placarNos ?? "–"}x${o.placarAdversario ?? "–"}</span>`).join(" · ")}</div>` : ""}
+          ${j.jogosOriginais ? `<div class="hist-meta hist-quadros">${j.jogosOriginais.map(o => `<span class="hist-quadro" data-jogo="${o.id}">${rotuloQuadro(o) || "Jogo"} ${o.placarNos ?? "–"}x${o.placarAdversario ?? "–"}</span>`).join(" · ")}</div>` : ""}
           ${golsTxt ? `<div class="hist-gols">⚽ ${escapeHtml(golsTxt)}</div>` : ""}
         </div>
         <div class="hist-placar">

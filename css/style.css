@@ -850,3 +850,8 @@ body.sem-time main#view-root{margin-left:0; padding:28px 18px 60px; max-width:76
   .banco-painel{position:static; max-height:none;}
   .banco-painel .banco-chip{display:inline-flex; width:auto; margin-right:6px;}
 }
+
+/* Resultado de cada quadro dentro do confronto agrupado: discreto */
+.hist-quadros{ font-size:.68rem; opacity:.65; margin-top:1px; }
+.hist-quadro{ cursor:pointer; }
+.hist-quadro:hover{ text-decoration:underline; }
