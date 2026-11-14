@@ -117,12 +117,24 @@ function lerMes(cell){
 }
 
 
+// Telefone: aceita (11) 98765-4321, 11987654321, +55 11 98765-4321... e guarda formatado.
+function lerTelefone(cell){
+  const t = texto(cell);
+  if (t === "") return { vazio: true };
+  let d = t.replace(/\D/g, "");
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2);
+  if (d.length === 11) return { valor: `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` };
+  if (d.length === 10) return { valor: `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` };
+  if (d.length === 8 || d.length === 9) return { valor: d.length === 9 ? `${d.slice(0, 5)}-${d.slice(5)}` : `${d.slice(0, 4)}-${d.slice(4)}` };
+  return { erro: `telefone "${t}" inválido (use DDD + número, ex.: 11 98765-4321)` };
+}
+
 // ----------------------------------------------------------------------------
 // Colunas das abas (o modelo muda conforme a modalidade: só o futsal tem "Quadro")
 // ----------------------------------------------------------------------------
 const ehFutsal = () => idModalidade() === "futsal";
 const QUADROS = ["1º quadro", "2º quadro"];
-const COLS_JOGADORES = ["Nome *", "Nome completo", "Posição", "Número da camisa", "Ativo", "Direito a voto", "Pagante", "Paga desde (AAAA-MM)", "Observações"];
+const COLS_JOGADORES = ["Nome *", "Nome completo", "Posição", "Número da camisa", "Ativo", "Direito a voto", "Pagante", "Paga desde (AAAA-MM)", "Observações", "Telefone"];
 const colsPartidas = () => ["Data *", "Horário", "Adversário *", "Campo *", ...(ehFutsal() ? ["Quadro"] : []), "Tipo de partida", "Status", "Placar nosso", "Placar adversário", "Observações"];
 const colsGols = () => ["Data *", "Adversário *", ...(ehFutsal() ? ["Quadro"] : []), "Autor do gol *", "Assistência", "Minuto", "Tempo", "Como foi o gol"];
 const colsParticipantes = () => ["Data *", "Adversário *", ...(ehFutsal() ? ["Quadro"] : []), "Jogador *"];
@@ -192,6 +204,7 @@ async function montarPlanilha(state, comDados){
     `  • Posição: ${categoriasAtleta().join(", ")}.`,
     "  • Ativo / Direito a voto / Pagante: Sim ou Não. Em branco = Ativo Sim, os outros Não.",
     "  • Paga desde: mês no formato AAAA-MM (ex.: 2026-03). Em branco = desde o início.",
+    "  • Telefone: com DDD (ex.: 11 98765-4321). É um dado privado: a exportação NUNCA traz o telefone atual (a coluna vem vazia). Só quem tem telefone preenchido é gravado; em branco NÃO apaga o telefone que já está no app. Para jogador já cadastrado, marque \"Atualizar\" na hora de importar.",
     "",
     futsal
       ? "PARTIDAS — a data + o adversário + o quadro identificam a partida. Cada quadro é uma linha (o confronto do dia tem 2 linhas: 1º quadro e 2º quadro)."
@@ -210,7 +223,7 @@ async function montarPlanilha(state, comDados){
     "",
     "PARTICIPANTES — uma linha por jogador que atuou na partida (conta como 1 jogo no ranking). Quem fez gol ou assistência já entra automaticamente.",
     "",
-    `Limites por importação: ${MAX_LINHAS} linhas em Jogadores e Partidas, ${LIM.gols} em Gols e ${LIM.participantes} em Participantes. Notas de avaliação, telefone, CPF e data de nascimento não vão na planilha.`,
+    `Limites por importação: ${MAX_LINHAS} linhas em Jogadores e Partidas, ${LIM.gols} em Gols e ${LIM.participantes} em Participantes. Notas de avaliação, CPF e data de nascimento não vão na planilha.`,
   ].forEach((t, i) => { const c = ajuda.getCell(i + 1, 1); c.value = t; if (i === 0) c.font = { bold: true, size: 14 }; c.alignment = { wrapText: true }; });
 
   // --- Listas (alimentam os menus de opções)
@@ -257,8 +270,9 @@ async function montarPlanilha(state, comDados){
 
   // --- Jogadores
   const wj = wb.addWorksheet("Jogadores");
-  cabecalho(wj, COLS_JOGADORES, [26, 28, 16, 12, 10, 14, 10, 18, 36]);
+  cabecalho(wj, COLS_JOGADORES, [26, 28, 16, 12, 10, 14, 10, 18, 36, 20]);
   wj.getColumn(8).numFmt = "@";
+  wj.getColumn(10).numFmt = "@";
   lista(wj, 3, ref(0, categoriasAtleta().length));
   [5, 6, 7].forEach(c => lista(wj, c, ref(5, 2)));
 
@@ -402,6 +416,8 @@ function lerJogadores(ws, state){
     const voto = lerSimNao(cel(row, 5), "Direito a voto"); if (voto.erro) L.erros.push(voto.erro);
     const pag = lerSimNao(cel(row, 6), "Pagante"); if (pag.erro) L.erros.push(pag.erro);
     const desde = lerMes(cel(row, 7)); if (desde.erro) L.erros.push(desde.erro);
+    const tel = lerTelefone(cel(row, 9)); if (tel.erro) L.erros.push(tel.erro);
+    L.telefone = tel.valor || "";
 
     const chave = norm(nome);
     if (nome && vistos[chave]) L.erros.push(`nome repetido na planilha (linha ${vistos[chave]})`);
@@ -792,7 +808,7 @@ function desenharPrevia(root, state){
     if (l.erros.length){ etiqueta = "Erro"; cls = "badge-off"; }
     else if (l.existenteId){ etiqueta = atualizarExistentes ? "Atualiza" : "Já existe — ignorada"; cls = atualizarExistentes ? "badge-pending" : "badge-off"; }
     else { etiqueta = "Novo"; cls = "badge-ok"; }
-    const msgs = [...l.erros, ...(l.avisos || []), ...(l.existenteId && !l.erros.length && l.detalhe ? [l.detalhe] : []), ...(l.novoAdversario && !l.erros.length ? [`adversário novo: ${l.novoAdversario}`] : []), ...(l.novoCampo && !l.erros.length ? [`campo novo: ${l.novoCampo}`] : [])];
+    const msgs = [...l.erros, ...(l.avisos || []), ...(l.existenteId && !l.erros.length && l.detalhe ? [l.detalhe] : []), ...(l.telefone && !l.erros.length ? ["com telefone"] : []), ...(l.novoAdversario && !l.erros.length ? [`adversário novo: ${l.novoAdversario}`] : []), ...(l.novoCampo && !l.erros.length ? [`campo novo: ${l.novoCampo}`] : [])];
     return `<tr>
       <td>${aba}</td><td>${l.linha}</td><td><strong>${escapeHtml(l.resumo || "")}</strong></td>
       <td><span class="badge ${cls}">${etiqueta}</span></td>
@@ -815,6 +831,7 @@ function desenharPrevia(root, state){
         ${novosAdv.length || novosCampos.length ? `<br>Serão cadastrados também: ${novosAdv.length} adversário${novosAdv.length === 1 ? "" : "s"} (${escapeHtml(novosAdv.map(c => nomeBonito(partidas, c, "novoAdversario")).join(", ") || "—")}) e ${novosCampos.length} campo${novosCampos.length === 1 ? "" : "s"} (${escapeHtml(novosCampos.map(c => nomeBonito(partidas, c, "novoCampo")).join(", ") || "—")}).` : ""}
       </div>
     </div>
+    ${(() => { const n = jogadores.filter(l => !l.erros.length && l.existenteId && l.telefone).length; return n && !atualizarExistentes ? `<div class="landing-aviso" style="margin-bottom:12px;">${n} telefone${n === 1 ? "" : "s"} de jogador${n === 1 ? "" : "es"} já cadastrado${n === 1 ? "" : "s"} <strong>${n === 1 ? "não será gravado" : "não serão gravados"}</strong>. Marque "Atualizar também os que já existem" abaixo para gravar.</div>` : ""; })()}
     ${cj.erros + cp.erros + cg.erros + cq.erros ? `<div class="landing-aviso" style="margin-bottom:12px;">As linhas com erro <strong>não serão importadas</strong>. Corrija no Excel e envie de novo, ou importe só as que estão certas.</div>` : ""}
     ${cj.existentes + cp.existentes + cg.existentes + cq.existentes ? `<label style="display:flex; align-items:center; gap:8px; font-size:13.5px; margin-bottom:12px;"><input type="checkbox" id="imp-atualizar" ${atualizarExistentes ? "checked" : ""} style="width:16px;height:16px;"> Atualizar também os que já existem (só os campos preenchidos; nos gols, a lista da partida é substituída pela da planilha)</label>` : ""}
     <div class="table-wrap" style="max-height:340px; overflow:auto;">
@@ -858,8 +875,10 @@ async function gravar(root, state){
       }
     });
     jog.forEach(l => {
-      if (l.existenteId) itens.push({ colecao: "atletas", id: l.existenteId, existente: true, dados: l.parcial });
+      if (l.existenteId){ if (Object.keys(l.parcial).length) itens.push({ colecao: "atletas", id: l.existenteId, existente: true, dados: l.parcial }); }
       else itens.push({ colecao: "atletas", id: l.novoId, existente: false, dados: l.dados });
+      // telefone: dado privado, em documento à parte (mesmo id do atleta). Só quem tem telefone preenchido.
+      if (l.telefone) itens.push({ colecao: "atletas_privado", id: l.existenteId || l.novoId, mesclar: true, dados: { telefone: l.telefone } });
     });
 
     // gols e participantes agrupados por partida (id da partida -> { gols, rel })
@@ -902,6 +921,8 @@ async function gravar(root, state){
     await importarEmLote(itens);
     const txt = (n, s, p) => `${n} ${n === 1 ? s : p}`;
     const resumo = [txt(jog.length, "jogador", "jogadores"), txt(par.length, "partida", "partidas")];
+    const nTel = jog.filter(l => l.telefone).length;
+    if (nTel) resumo.push(txt(nTel, "telefone", "telefones"));
     if (gol.length) resumo.push(txt(gol.length, "gol", "gols"));
     if (part.length) resumo.push(txt(part.length, "participante", "participantes"));
     const frase = resumo.length > 2 ? resumo.slice(0, -1).join(", ") + " e " + resumo[resumo.length - 1] : resumo.join(" e ");

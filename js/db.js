@@ -166,7 +166,10 @@ export async function importarEmLote(itens){
   for (let i = 0; i < itens.length; i += 400){
     const lote = writeBatch(db);
     itens.slice(i, i + 400).forEach(it => {
-      if (it.existente){
+      if (it.mesclar){
+        // documento privado: cria ou completa, sem apagar os outros campos
+        lote.set(docRef(it.colecao, it.id), it.dados, { merge: true });
+      } else if (it.existente){
         lote.update(docRef(it.colecao, it.id), it.dados);
       } else {
         const ref = it.id ? docRef(it.colecao, it.id) : doc(colRef(it.colecao));
