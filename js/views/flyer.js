@@ -15,7 +15,49 @@ export const TEMAS = {
   noite: { nome: "Preto clássico", bg: "linear-gradient(180deg,#0d0d0d 0%,#1d1d1d 100%)", fg: "#ffffff", get accent(){ return TEAM.corDestaque; }, muted: "#a9a9a9", muted2: "#cfcfcf", faint: "#5f5f5f", border: "none", ring: "transparent" },
   estadio: { nome: "Noite de estádio (gramado e refletores)", bg: "radial-gradient(ellipse at 50% 0%, rgba(228,182,43,.38) 0, rgba(228,182,43,0) 55%), radial-gradient(ellipse at 50% 100%, rgba(228,182,43,.22) 0, rgba(228,182,43,0) 50%), repeating-linear-gradient(0deg,#0b2b17 0,#0b2b17 100px,#0e3520 100px,#0e3520 200px)", fg: "#ffffff", get accent(){ return TEAM.corDestaque; }, muted: "#b9d1c0", muted2: "#dbe9df", faint: "#6f8f78", border: "none", ring: "transparent", estadio: true },
   arte: { nome: "Preto com moldura (estilo do time)", bg: "#000000", fg: "#ffffff", get accent(){ return TEAM.corDestaque; }, muted: "#b5b5b5", muted2: "#d8d8d8", faint: "#6a6a6a", border: "none", ring: "transparent", decor: true },
+  // Fundo claro: papel off-white com faixas na cor do time (texto escuro; a cor de
+  // destaque é escurecida para continuar legível sobre o claro).
+  claro: { nome: "Claro (branco e cor do time)", bg: "linear-gradient(180deg,#fbf9f4 0%,#f1ede3 100%)", fg: "#141414", get accent(){ return escurecer(TEAM.corDestaque, 0.28); }, muted: "#5b5b5b", muted2: "#333333", faint: "#8d8d8d", border: "none", ring: "transparent", extra: "claro" },
+  // Fundo cheio na cor do time, com listras diagonais discretas (texto escuro ou
+  // branco conforme o brilho da cor; o "destaque" vira o próprio texto).
+  cor: { nome: "Cor do time (fundo cheio)", get bg(){ const c = TEAM.corDestaque; return `repeating-linear-gradient(135deg, rgba(0,0,0,.07) 0 70px, rgba(0,0,0,0) 70px 140px), linear-gradient(180deg, ${clarear(c, 0.08)} 0%, ${escurecer(c, 0.14)} 100%)`; }, get fg(){ return textoSobre(TEAM.corDestaque); }, get accent(){ return textoSobre(TEAM.corDestaque); }, get muted(){ return textoSobre(TEAM.corDestaque, .78); }, get muted2(){ return textoSobre(TEAM.corDestaque, .9); }, get faint(){ return textoSobre(TEAM.corDestaque, .55); }, border: "none", ring: "transparent", extra: "cor" },
 };
+
+// ---- Utilidades de cor (os fundos novos se adaptam à cor de destaque do time) ----
+function rgbDe(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  const n = parseInt(m ? m[1] : "E4B62B", 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+const hex2 = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
+function escurecer(hex, k){ const [r, g, b] = rgbDe(hex); return `#${hex2(r * (1 - k))}${hex2(g * (1 - k))}${hex2(b * (1 - k))}`; }
+function clarear(hex, k){ const [r, g, b] = rgbDe(hex); return `#${hex2(r + (255 - r) * k)}${hex2(g + (255 - g) * k)}${hex2(b + (255 - b) * k)}`; }
+function brilho(hex){ const [r, g, b] = rgbDe(hex); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
+// Cor de texto legível sobre a cor do time: quase preto em cores claras, branco nas escuras.
+function textoSobre(hex, alfa = 1){
+  // Prefere a cor principal do time como cor do texto quando ela contrasta bem com o fundo.
+  const p = TEAM.corPrimaria;
+  const usaPrimaria = p && Math.abs(brilho(p) - brilho(hex)) > 0.45;
+  const [r, g, b] = usaPrimaria ? rgbDe(p) : (brilho(hex) > 0.55 ? [20, 20, 20] : [255, 255, 255]);
+  return alfa >= 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alfa})`;
+}
+// Cor principal do time garantida escura (para faixas sobre fundo claro).
+function principalEscura(){ let p = TEAM.corPrimaria || "#1a1a1a"; return brilho(p) > 0.4 ? escurecer(p, 0.6) : p; }
+
+// Decoração dos fundos novos (camada atrás do conteúdo).
+function decorExtra(T){
+  const c = TEAM.corDestaque;
+  if (T.extra === "claro") return `
+    <div style="position:absolute; left:0; right:0; top:0; height:34px; background:${principalEscura()};"></div>
+    <div style="position:absolute; left:0; right:0; top:34px; height:10px; background:${c};"></div>
+    <div style="position:absolute; left:0; right:0; bottom:0; height:34px; background:${principalEscura()};"></div>
+    <div style="position:absolute; left:0; right:0; bottom:34px; height:10px; background:${c};"></div>
+    <div style="position:absolute; left:50%; top:50%; width:820px; height:820px; transform:translate(-50%,-50%); border:5px solid rgba(0,0,0,.045); border-radius:50%;"></div>`;
+  if (T.extra === "cor") return `
+    <div style="position:absolute; left:26px; right:26px; top:26px; bottom:26px; border:4px solid ${textoSobre(c, .5)}; border-radius:30px;"></div>
+    <div style="position:absolute; left:50%; top:50%; width:820px; height:820px; transform:translate(-50%,-50%); border:5px solid ${textoSobre(c, .12)}; border-radius:50%;"></div>`;
+  return "";
+}
 
 // Detalhes do tema "estádio": moldura dourada fina e marcações de campo (círculo
 // central e linha do meio) bem discretas ao fundo.
@@ -158,7 +200,7 @@ function flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jo
   const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:${T.bg}; color:${T.fg}; border:${T.border}; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
   // Detalhes do tema "arte": riscos diagonais amarelos nos cantos.
   const risco = (css) => `<div style="position:absolute; height:6px; background:${DOURADO}; ${css}"></div>`;
-  const cantos = T.estadio ? DECOR_ESTADIO : T.decor ? [
+  const cantos = T.extra ? decorExtra(T) : T.estadio ? DECOR_ESTADIO : T.decor ? [
     risco("left:-60px; top:140px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:215px; width:380px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:290px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
@@ -475,7 +517,7 @@ export function estruturaFlyer(tema, formato){
   const H = formato === "story" ? 1920 : 1350;
   const base = `width:${W}px; height:${H}px; box-sizing:border-box; padding:80px 70px; background:${T.bg}; color:${T.fg}; border:${T.border}; font-family:'Inter',system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:space-between; position:relative; overflow:hidden;`;
   const risco = (css) => `<div style="position:absolute; height:6px; background:${A}; ${css}"></div>`;
-  const cantos = T.estadio ? DECOR_ESTADIO : T.decor ? [
+  const cantos = T.extra ? decorExtra(T) : T.estadio ? DECOR_ESTADIO : T.decor ? [
     risco("left:-60px; top:140px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:215px; width:380px; transform:rotate(-45deg); transform-origin:left center;"),
     risco("left:-60px; top:290px; width:260px; transform:rotate(-45deg); transform-origin:left center;"),

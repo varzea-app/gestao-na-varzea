@@ -3,6 +3,7 @@ import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, f
 import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID, agruparConfrontos, rotuloQuadro, jogosPorConfronto } from "../stats.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 import { abrevPosicao } from "./escalacao-ideal.js";
+import { openImagemModal } from "./flyer.js";
 import { ordemPosicao } from "../modalidade.js";
 
 
@@ -209,115 +210,75 @@ function ordenarEntriesPorPosicao(entries){
   });
 }
 
-// Gera uma imagem (PNG) da súmula (placar, gols/assistências e as duas
-// escalações com a nota de cada jogador) e compartilha (Web Share API) ou
-// baixa o arquivo — mesmo padrão usado no Ranking e na Escalação ideal.
-async function compartilharImagemSumula(jogo, adv, campo, eventos, entriesInicial, entriesFinal, mediaPorAtleta, nome){
-  if (typeof html2canvas !== "function"){
-    toast("Não foi possível gerar a imagem (recurso indisponível).", "err");
-    return;
-  }
+// Imagem (PNG) da súmula para compartilhar: mesmo modal das outras imagens do app
+// (fundo e formato à escolha). Mostra o placar, os gols e as duas escalações com
+// a nota de cada jogador.
+function compartilharImagemSumula(jogo, adv, campo, eventos, entriesInicial, entriesFinal, mediaPorAtleta, nome){
   const r = resultadoJogo(jogo);
   const resultadoLabel = { vitoria: "Vitória", empate: "Empate", derrota: "Derrota" }[r] || "";
+  const advNome = adv?.nome || "Adversário";
+  const rotQuadro = rotuloQuadro(jogo);
+  const legenda = [`⚽ Súmula — ${TEAM.nome} ${jogo.placarNos ?? "–"} x ${jogo.placarAdversario ?? "–"} ${advNome}${rotQuadro ? ` (${rotQuadro})` : ""}`,
+    `📅 ${formatDateLong(jogo.data)}${campo?.nome ? ` · 📍 ${campo.nome}` : ""}`, "", hashtags()].join("\n");
 
-  const eventosImgHtml = eventos.length === 0
-    ? `<div style="color:#8A8F98; font-size:12px;">Nenhum gol registrado.</div>`
-    : eventos.map(e => {
-        const meta = [e.tipoGol, e.tempo].filter(Boolean).join(" · ");
-        return `
-      <div style="display:flex; gap:8px; padding:5px 0; border-bottom:1px solid #EDEDED; font-size:12.5px; color:#222;">
-        <span style="font-family:monospace; color:#B8860B; font-weight:700; width:28px; flex-shrink:0;">${e.minuto ?? "–"}'</span>
-        <span>⚽ ${nome(e.atletaGolId)}${e.atletaAssistId ? ` <span style="color:#8A8F98;">(assist. ${nome(e.atletaAssistId)})</span>` : ""}${meta ? ` <span style="color:#A9AEB5; font-size:10.5px;">— ${meta}</span>` : ""}</span>
+  openImagemModal({
+    titulo: "Imagem da súmula",
+    arquivo: `sumula-${jogo.data || "jogo"}`,
+    legenda,
+    render: (e) => {
+      const { T, A, H, base, cantos, topo, rodape } = e;
+      // Tamanho das linhas se ajusta à quantidade de gols e de jogadores para tudo caber.
+      const gCols = eventos.length > 6 ? 2 : 1;
+      const gRows = Math.max(1, Math.ceil(eventos.length / gCols));
+      const nEsc = Math.max(1, entriesInicial.length, entriesFinal.length);
+      const disponivel = H - 160 - 96 - 90 - 300 - 50 - 110 - 100 - 70;
+      const rowH = Math.max(30, Math.min(54, Math.floor(disponivel / (gRows + nEsc))));
+      const fs = Math.round(rowH * 0.52);
+      const placarFs = gRows + nEsc > 15 ? 150 : 190; // jogos com muita gente: placar um pouco menor
+      const linha = `border-bottom:2px solid ${A}33;`;
+      const golsHtml = eventos.length === 0
+        ? `<div style="font-size:${fs}px; color:${T.muted};">Nenhum gol registrado.</div>`
+        : `<div style="display:grid; grid-template-columns:${gCols === 2 ? "1fr 1fr" : "1fr"}; column-gap:36px; width:100%;">${eventos.map(ev => `
+            <div style="display:flex; align-items:center; gap:12px; height:${rowH}px; ${linha} font-size:${fs}px; min-width:0;">
+              <span style="font-weight:800; color:${A}; width:${Math.round(fs * 2.4)}px; flex-shrink:0;">${ev.minuto ?? "–"}'</span>
+              <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">⚽ ${nome(ev.atletaGolId)}${ev.atletaAssistId ? ` <span style="color:${T.muted};">(${nome(ev.atletaAssistId)})</span>` : ""}</span>
+            </div>`).join("")}</div>`;
+      const coluna = (titulo, entries) => `
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:'Bebas Neue',sans-serif; font-size:${Math.round(fs * 1.5)}px; letter-spacing:.12em; color:${A}; margin-bottom:6px;">${titulo}</div>
+          ${entries.length ? entries.map(en => {
+            const m = mediaPorAtleta[en.atletaId];
+            return `<div style="display:flex; align-items:center; gap:10px; height:${rowH}px; ${linha} font-size:${fs}px;">
+              <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nome(en.atletaId)}</span>
+              ${en.posicao ? `<span style="color:${T.muted}; font-size:${Math.round(fs * 0.75)}px;">${escapeHtml(abrevPosicao(en.posicao))}</span>` : ""}
+              <span style="font-weight:800; color:${A}; min-width:${Math.round(fs * 2)}px; text-align:right;">${m != null ? fmt1(m) : "—"}</span>
+            </div>`;
+          }).join("") : `<div style="font-size:${fs}px; color:${T.muted};">Não informada.</div>`}
+        </div>`;
+      const sec = (t) => `<div style="font-family:'Bebas Neue',sans-serif; font-size:${Math.round(fs * 1.5)}px; letter-spacing:.12em; color:${A}; margin-bottom:6px;">${t}</div>`;
+      return `<div style="${base}">${cantos}${topo}
+        <div style="text-align:center; width:100%;">
+          <div style="font-family:'Bebas Neue',sans-serif; font-size:84px; letter-spacing:.16em; color:${A}; line-height:1;">SÚMULA${rotQuadro ? ` · ${escapeHtml(rotQuadro.toUpperCase())}` : ""}</div>
+          <div style="font-size:30px; color:${T.muted2}; margin-top:6px;">${escapeHtml(formatDateLong(jogo.data))}</div>
+          <div style="display:flex; align-items:center; justify-content:center; gap:36px; margin-top:18px;">
+            <div style="flex:1; text-align:center; min-width:0;">
+              <div style="font-family:'Bebas Neue',sans-serif; font-size:46px; letter-spacing:.06em; line-height:1.05;">${TEAM.nomeUpperHtml}</div>
+              <div style="font-family:'Bebas Neue',sans-serif; font-size:${placarFs}px; line-height:1; color:${A};">${jogo.placarNos ?? "–"}</div>
+            </div>
+            <div style="font-family:'Bebas Neue',sans-serif; font-size:70px; color:${T.muted};">X</div>
+            <div style="flex:1; text-align:center; min-width:0;">
+              <div style="font-family:'Bebas Neue',sans-serif; font-size:46px; letter-spacing:.06em; line-height:1.05;">${escapeHtml(advNome.toUpperCase())}</div>
+              <div style="font-family:'Bebas Neue',sans-serif; font-size:${placarFs}px; line-height:1; color:${A};">${jogo.placarAdversario ?? "–"}</div>
+            </div>
+          </div>
+          <div style="font-size:28px; color:${T.muted2}; margin-top:4px;">📍 ${escapeHtml(campo?.nome || "—")}${resultadoLabel ? ` · ${resultadoLabel}` : ""}${desempateJogo(jogo) ? ` · ${escapeHtml(desempateJogo(jogo).texto)}` : ""}</div>
+        </div>
+        <div style="width:100%;">${sec("GOLS E ASSISTÊNCIAS")}${golsHtml}</div>
+        <div style="width:100%; display:flex; gap:40px;">${coluna("ESCALAÇÃO INICIAL", entriesInicial)}${coluna("ESCALAÇÃO FINAL", entriesFinal)}</div>
+        ${rodape}
       </div>`;
-      }).join("");
-
-  const listaImgHtml = (entries) => {
-    if (!entries.length) return `<div style="color:#8A8F98; font-size:12px;">Não informada.</div>`;
-    return entries.map(e => {
-      const media = mediaPorAtleta[e.atletaId];
-      return `
-      <div style="display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #EDEDED; font-size:12px; color:#222;">
-        <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nome(e.atletaId)}</span>
-        ${e.posicao ? `<span style="color:#8A8F98; font-size:10px; flex-shrink:0;">${escapeHtml(abrevPosicao(e.posicao))}</span>` : ""}
-        <span style="font-family:monospace; font-weight:700; color:#B8860B; min-width:26px; text-align:right; flex-shrink:0;">${media != null ? media.toFixed(1) : "—"}</span>
-      </div>`;
-    }).join("");
-  };
-
-  const card = document.createElement("div");
-  card.style.cssText = "position:fixed; left:-9999px; top:0; width:560px; background:#fff; padding:22px; font-family:'Inter',system-ui,sans-serif;";
-  card.innerHTML = `
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
-      <img src="${TEAM.escudo}" crossorigin="anonymous" style="width:38px; height:38px; border-radius:50%; object-fit:cover;">
-      <div>
-        <div style="font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:.03em; color:#141414; line-height:1;">${TEAM.nomeUpperHtml}</div>
-        <div style="font-size:11px; color:#5B6470; margin-top:2px;">Súmula — ${formatDateLong(jogo.data)}</div>
-      </div>
-    </div>
-
-    <div style="display:flex; align-items:center; justify-content:space-between; background:#141414; border-radius:10px; padding:16px 18px; margin-bottom:10px;">
-      <div style="text-align:center; flex:1;">
-        <div style="font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:rgba(255,255,255,.6); font-weight:700; margin-bottom:6px;">${TEAM.nomeHtml}</div>
-        <div style="font-family:monospace; font-size:32px; font-weight:700; color:#E4B62B;">${jogo.placarNos ?? "–"}</div>
-      </div>
-      <div style="color:rgba(255,255,255,.5); font-size:13px; padding:0 10px;">VS</div>
-      <div style="text-align:center; flex:1;">
-        <div style="font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:rgba(255,255,255,.6); font-weight:700; margin-bottom:6px;">${escapeHtml(adv?.nome || "?")}</div>
-        <div style="font-family:monospace; font-size:32px; font-weight:700; color:#E4B62B;">${jogo.placarAdversario ?? "–"}</div>
-      </div>
-    </div>
-    <div style="font-size:11px; color:#5B6470; margin-bottom:16px;">📍 ${escapeHtml(campo?.nome || "—")}${resultadoLabel ? ` · ${resultadoLabel}` : ""}${desempateJogo(jogo) ? ` · ${escapeHtml(desempateJogo(jogo).texto)}` : ""}</div>
-
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8A8F98; font-weight:700; margin-bottom:8px;">Gols e assistências</div>
-    ${eventosImgHtml}
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px;">
-      <div>
-        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8A8F98; font-weight:700; margin-bottom:8px;">Escalação inicial</div>
-        ${listaImgHtml(entriesInicial)}
-      </div>
-      <div>
-        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8A8F98; font-weight:700; margin-bottom:8px;">Escalação final</div>
-        ${listaImgHtml(entriesFinal)}
-      </div>
-    </div>
-  `;
-  document.body.appendChild(card);
-
-  try{
-    const canvas = await html2canvas(card, { backgroundColor: "#ffffff", scale: 2, windowWidth: 1000, useCORS: true });
-    card.remove();
-
-    canvas.toBlob(async (blob) => {
-      if (!blob){
-        toast("Não foi possível gerar a imagem.", "err");
-        return;
-      }
-      const file = new File([blob], `sumula-${jogo.data || "jogo"}.png`, { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })){
-        try{
-          await navigator.share({ files: [file], title: "Súmula", text: `Súmula — ${TEAM.nome} ${jogo.placarNos ?? "–"} x ${jogo.placarAdversario ?? "–"} ${adv?.nome || "?"}` });
-          return;
-        }catch(err){
-          if (err?.name === "AbortError") return; // usuário cancelou o compartilhamento
-          console.error(err);
-        }
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `sumula-${jogo.data || "jogo"}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast("Imagem salva!", "ok");
-    }, "image/png");
-  }catch(err){
-    card.remove();
-    console.error(err);
-    toast("Erro ao gerar a imagem: " + err.message, "err");
-  }
+    },
+  });
 }
 
 // Topo da súmula de um confronto: placar somado dos quadros + abas (2º quadro, 1º quadro).
@@ -440,14 +401,7 @@ function openSumulaModal(jogo, state, grupo = null){
     if (outro) openSumulaModal(outro, state, grupo);
   }));
 
-  $("#btn-share-sumula")?.addEventListener("click", async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    toast("Gerando imagem…", "ok");
-    try{
-      await compartilharImagemSumula(jogo, adv, campo, eventos, entriesInicial, entriesFinal, mediaPorAtleta, nome);
-    } finally {
-      btn.disabled = false;
-    }
+  $("#btn-share-sumula")?.addEventListener("click", () => {
+    compartilharImagemSumula(jogo, adv, campo, eventos, entriesInicial, entriesFinal, mediaPorAtleta, nome);
   });
 }
