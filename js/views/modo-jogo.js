@@ -6,7 +6,7 @@ import { TEAM } from "../tenant.js";
 import { $, $$, escapeHtml, toast, formatDateLong, confirmAction, todayISO } from "../utils.js";
 import { updateJogoField } from "../db.js";
 import { ordemPosicao, siglaPosicao } from "../modalidade.js";
-import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, normalizeEscalacao, ordemCronologica } from "../stats.js";
+import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, normalizeEscalacao, ordemCronologica, rotuloQuadro } from "../stats.js";
 
 // ----------------------------------------------------------------------------
 // Estado da tela (fica na memória enquanto a página está aberta)
@@ -170,7 +170,9 @@ function tirarDaFila(jogoId, id){
 
 // c = { jogo, adv, campo, atletas, eventos, nos, advP }
 function nomeDe(c, id){ return id === GOL_CONTRA_ID ? "Gol contra do adversário" : (c.atletas.find(a => a.id === id)?.nome || "?"); }
-function placarLinha(c){ return `📊 *${TEAM.nome} ${c.nos} x ${c.advP} ${c.adv?.nome || "Adversário"}*`; }
+// Nome do time nos avisos; no futsal acrescenta o quadro que está jogando, ex.: "Meu Time (2º quadro)".
+function nomeTime(c){ return TEAM.nome + (rotuloQuadro(c.jogo) ? ` (${rotuloQuadro(c.jogo)})` : ""); }
+function placarLinha(c){ return `📊 *${nomeTime(c)} ${c.nos} x ${c.advP} ${c.adv?.nome || "Adversário"}*`; }
 
 function linhaGol(c, e, detalhado){
   const meta = detalhado ? [e.tempo, e.tipoGol].filter(Boolean).join(", ") : "";
@@ -189,20 +191,20 @@ function msgInicio(c){
     return { i, ordem: ordemPosicao(pos), sigla: pos ? siglaPosicao(pos) : "---", nome: a.nome };
   }).filter(Boolean).sort((x, y) => x.ordem - y.ordem || x.i - y.i);
   const linhas = itens.map(x => `• ${x.sigla} - ${x.nome}`);
-  return `🟢 *COMEÇOU!* ${TEAM.nome} x ${c.adv?.nome || "Adversário"}` +
+  return `🟢 *COMEÇOU!* ${nomeTime(c)} x ${c.adv?.nome || "Adversário"}` +
     (c.campo?.nome ? `\n📍 ${c.campo.nome}` : "") +
     (linhas.length ? `\n\n*Escalação inicial:*\n${linhas.join("\n")}` : "");
 }
 function msgGol(c, e){
   if (!e){ // gol sem autor
-    return `⚽ *GOL do ${TEAM.nome}!*\n\n${placarLinha(c)}`;
+    return `⚽ *GOL do ${nomeTime(c)}!*\n\n${placarLinha(c)}`;
   }
   if (e.atletaGolId === GOL_CONTRA_ID){
-    return `⚽ *GOL CONTRA do adversário!* (a favor do ${TEAM.nome})` +
+    return `⚽ *GOL CONTRA do adversário!* (a favor do ${nomeTime(c)})` +
       `${e.minuto != null ? `\n⏱ ${e.minuto}'${e.tempo ? ` do ${e.tempo}` : ""}` : (e.tempo ? `\n⏱ ${e.tempo}` : "")}\n\n${placarLinha(c)}`;
   }
   const quando = e.minuto != null ? `${e.minuto}'${e.tempo ? ` do ${e.tempo}` : ""}` : (e.tempo || "");
-  return `⚽ *GOL do ${TEAM.nome}!*\n*${nomeDe(c, e.atletaGolId)}*` +
+  return `⚽ *GOL do ${nomeTime(c)}!*\n*${nomeDe(c, e.atletaGolId)}*` +
     (e.tipoGol ? `\n🎯 ${e.tipoGol}` : "") +
     (quando ? `\n⏱ ${quando}` : "") +
     (e.atletaAssistId ? `\n🅰️ Assistência: ${nomeDe(c, e.atletaAssistId)}` : "") +
@@ -213,7 +215,7 @@ function msgGolAdversario(c){
 }
 function msgFimT1(c){
   const gols = c.eventos.map(e => linhaGol(c, e, false));
-  return `⏸ *Fim do 1º tempo*\n${placarLinha(c)}\n\n*Gols do ${TEAM.nome}:*\n${gols.length ? gols.join("\n") : "Nenhum gol com autor lançado."}${golsAdversarioLinha(c)}`;
+  return `⏸ *Fim do 1º tempo*\n${placarLinha(c)}\n\n*Gols do ${nomeTime(c)}:*\n${gols.length ? gols.join("\n") : "Nenhum gol com autor lançado."}${golsAdversarioLinha(c)}`;
 }
 function msgInicioT2(c){
   return `▶️ *Começou o 2º tempo!*\n${placarLinha(c)}`;
@@ -225,7 +227,7 @@ function msgFimJogo(c){
   c.eventos.forEach(e => { if (e.atletaAssistId && e.atletaAssistId !== GOL_CONTRA_ID) cont[e.atletaAssistId] = (cont[e.atletaAssistId] || 0) + 1; });
   const assists = Object.entries(cont).map(([id, n]) => `${nomeDe(c, id)}${n > 1 ? ` (${n})` : ""}`);
   return `🏁 *FIM DE JOGO*\n${placarLinha(c)}\n${res}` +
-    `\n\n*Gols do ${TEAM.nome}:*\n${gols.length ? gols.join("\n") : "Nenhum gol com autor lançado."}` +
+    `\n\n*Gols do ${nomeTime(c)}:*\n${gols.length ? gols.join("\n") : "Nenhum gol com autor lançado."}` +
     (assists.length ? `\n\n🅰️ *Assistências:* ${assists.join(", ")}` : "") +
     golsAdversarioLinha(c);
 }
@@ -331,7 +333,7 @@ export function renderModoJogo(root, state, jogoId){
 
       <div class="mj-placar">
         <div class="mj-lado">
-          <div class="mj-time">${TEAM.nomeHtml}</div>
+          <div class="mj-time">${TEAM.nomeHtml}${rotuloQuadro(jogo) ? `<div style="font-size:.5em; opacity:.8; font-weight:600;">${rotuloQuadro(jogo)}</div>` : ""}</div>
           <div class="mj-num" id="mj-nos">${nosPlacar}</div>
         </div>
         <div class="mj-x">×</div>
