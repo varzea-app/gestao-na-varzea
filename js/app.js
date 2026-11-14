@@ -23,6 +23,7 @@ import { renderPremiacoes } from "./views/premiacoes.js";
 import { renderConfiguracoes } from "./views/configuracoes.js";
 import { renderAdmin } from "./views/admin.js";
 import { renderLanding } from "./views/landing.js";
+import { filtrarPorQuadro } from "./filters.js";
 
 // ============================================================================
 // Estado
@@ -383,7 +384,7 @@ function render(){
     else {
       // Atalho do menu: abre o jogo de hoje (ou o próximo agendado). Sem jogo
       // agendado, avisa em vez de abrir um jogo já realizado.
-      const alvo = jogoParaModoJogo(state.jogos);
+      const alvo = jogoParaModoJogo(filtrarPorQuadro(state.jogos));
       if (alvo){ location.replace(`#modojogo/${alvo.id}`); return; }
       renderSemJogoAgendado(root);
       return;
