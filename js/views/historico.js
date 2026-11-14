@@ -78,12 +78,12 @@ export function renderHistorico(root, state, subId){
     const golsTxt = Object.entries(gols).map(([id, n]) => `${nomeAtleta(id)}${n > 1 ? ` ${n}` : ""}`).join(", ");
     const n = nota(j);
     return `
-      <div class="hist-card" data-id="${j.id}">
+      <div class="hist-card" data-id="${j.id}"${j.jogosOriginais ? ` data-grupo="${j.jogosOriginais.map(o => o.id).join(",")}"` : ""}>
         <div class="hist-res ${info ? info.cls : ""}" title="${info ? info.nome : ""}">${info ? info.letra : "—"}</div>
         <div class="hist-info">
           <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}${j.jogosOriginais ? ` <span class="badge badge-pending">confronto · ${j.jogosOriginais.length} quadros</span>` : (rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : "")}</div>
           <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId))}${desempateJogo(j) ? ` · ${escapeHtml(desempateJogo(j).texto)}` : ""}</div>
-          ${j.jogosOriginais ? `<div class="hist-meta hist-quadros">${j.jogosOriginais.map(o => `<span class="hist-quadro" data-jogo="${o.id}">${rotuloQuadro(o) || "Jogo"} ${o.placarNos ?? "–"}x${o.placarAdversario ?? "–"}</span>`).join(" · ")}</div>` : ""}
+          ${j.jogosOriginais ? `<div class="hist-meta hist-quadros">${j.jogosOriginais.map(o => `<span class="hist-quadro" data-jogo="${o.id}" data-grupo="${j.jogosOriginais.map(x => x.id).join(",")}">${rotuloQuadro(o) || "Jogo"} ${o.placarNos ?? "–"}x${o.placarAdversario ?? "–"}</span>`).join(" · ")}</div>` : ""}
           ${golsTxt ? `<div class="hist-gols">⚽ ${escapeHtml(golsTxt)}</div>` : ""}
         </div>
         <div class="hist-placar">
@@ -167,15 +167,22 @@ export function renderHistorico(root, state, subId){
   });
   $("#ordem-hist", root)?.addEventListener("change", (e) => { ordemHistorico = e.target.value; renderHistorico(root, state); });
 
+  // Confronto (Geral): abre a súmula do 2º quadro (o 1º jogado) com abas para o outro quadro.
+  const abrirGrupo = (ids, primeiroId) => {
+    const grupo = ids.map(id => state.jogos.find(j => j.id === id)).filter(Boolean)
+      .sort((a, b) => (b.quadro || "").localeCompare(a.quadro || ""));
+    const alvo = grupo.find(j => j.id === primeiroId) || grupo[0];
+    if (alvo) openSumulaModal(alvo, state, grupo.length > 1 ? grupo : null);
+  };
   $$(".hist-quadro[data-jogo]", root).forEach(el => {
     el.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      const jogo = state.jogos.find(j => j.id === el.dataset.jogo);
-      if (jogo) openSumulaModal(jogo, state);
+      abrirGrupo(el.dataset.grupo.split(","), el.dataset.jogo);
     });
   });
   $$(".hist-card[data-id]", root).forEach(el => {
     el.addEventListener("click", () => {
+      if (el.dataset.grupo) return abrirGrupo(el.dataset.grupo.split(","), null);
       const jogo = state.jogos.find(j => j.id === el.dataset.id);
       if (jogo) openSumulaModal(jogo, state);
     });
@@ -313,7 +320,23 @@ async function compartilharImagemSumula(jogo, adv, campo, eventos, entriesInicia
   }
 }
 
-function openSumulaModal(jogo, state){
+// Topo da súmula de um confronto: placar somado dos quadros + abas (2º quadro, 1º quadro).
+function confrontoCabecalhoHtml(jogoAtual, grupo, state){
+  const conf = jogosPorConfronto(grupo)[0];
+  const r = resultadoJogo(conf);
+  const info = RES_INFO[r];
+  return `
+    <div class="confronto-cab" style="margin-bottom:16px;">
+      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;">
+        Confronto · ${conf.placarNos ?? "–"} x ${conf.placarAdversario ?? "–"}${info ? ` · ${info.nome}` : ""}
+      </div>
+      <div class="rank-chips">
+        ${grupo.map(g => `<button class="rank-chip ${g.id === jogoAtual.id ? "active" : ""}" data-aba-jogo="${g.id}" type="button">${rotuloQuadro(g) || "Jogo"} · ${g.placarNos ?? "–"} x ${g.placarAdversario ?? "–"}</button>`).join("")}
+      </div>
+    </div>`;
+}
+
+function openSumulaModal(jogo, state, grupo = null){
   const adv = state.adversarios.find(a => a.id === jogo.adversarioId);
   const campo = state.campos.find(c => c.id === jogo.campoId);
   const nome = id => id === GOL_CONTRA_ID ? "Gol contra (adversário)" : escapeHtml(state.atletas.find(a => a.id === id)?.nome || "?");
@@ -378,6 +401,7 @@ function openSumulaModal(jogo, state){
       </div>
     </div>
     <div class="modal-body">
+      ${grupo ? confrontoCabecalhoHtml(jogo, grupo, state) : ""}
       <div class="sumula" style="margin-bottom:20px;">
         <div class="sumula-side"><div class="team">${TEAM.nomeHtml}</div><div class="score">${jogo.placarNos ?? "–"}</div></div>
         <div class="sumula-mid"><div class="vs">VS</div><div class="date">${formatDateLong(jogo.data)}</div></div>
@@ -411,6 +435,10 @@ function openSumulaModal(jogo, state){
   `, { wide: true });
 
   $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+  $$("[data-aba-jogo]").forEach(b => b.addEventListener("click", () => {
+    const outro = grupo.find(g => g.id === b.dataset.abaJogo);
+    if (outro) openSumulaModal(outro, state, grupo);
+  }));
 
   $("#btn-share-sumula")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget;
