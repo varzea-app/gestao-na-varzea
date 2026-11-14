@@ -156,6 +156,20 @@ function melhorParaLinha(atletaId, linha, notasPos, atletasConsiderados, jogosFi
   return { posicaoJogada: atleta?.posicao || "—", media: overall.media, qtd: overall.qtd };
 }
 
+// Posição em que o jogador está ATUANDO na escalação montada (a vaga do campo),
+// e não a do cadastro. Vaga de uma posição só (GOL, ZAG, LAT, ATA...) = essa posição.
+// No meio-campo (Volante/Meia), as pontas são MEI e o centro é VOL (3+ jogadores
+// na linha); nos demais casos usa a posição do jogador, se couber na vaga.
+function posicaoNaVaga(linha, i, info, atleta){
+  const pos = linha.slots[i];
+  if (pos.length === 1) return pos[0];
+  const n = linha.slots.length;
+  if (pos.includes("Volante") && pos.includes("Meia") && n >= 3) return (i === 0 || i === n - 1) ? "Meia" : "Volante";
+  if (pos.includes(info.posicaoJogada)) return info.posicaoJogada;
+  if (pos.includes(atleta?.posicao)) return atleta.posicao;
+  return pos[pos.length - 1];
+}
+
 // Gera uma imagem (PNG) do campo com a escalação ideal e compartilha (Web
 // Share API, quando disponível) ou baixa o arquivo. Renderiza numa cópia
 // fora da tela, forçando o layout "desktop" (windowWidth maior) pra imagem
@@ -347,7 +361,6 @@ export function renderEscalacaoIdeal(root, state){
       presProx = items;
       if (!primeira && assin === presAssin) return;
       presAssin = assin;
-      if (soConfirmados) resetArranjoManual();
       if (location.hash === "#escalacao-ideal") renderEscalacaoIdeal(root, state);
     });
   }
@@ -462,7 +475,21 @@ export function renderEscalacaoIdeal(root, state){
   // O arranjo manual (ordem) guarda 1 entrada por vaga do campo — se ainda
   // não existe (primeira vez, ou formação/filtro/seleção acabou de mudar),
   // começa igual à sugestão automática calculada acima.
-  if (!ordem) ordem = [...atribuido];
+  if (!ordem || ordem.length !== atribuido.length) ordem = [...atribuido];
+  else {
+    // O arranjo manual sobrevive a mudanças de filtro. Só quem deixou de ser
+    // considerado (excluído, não confirmou...) sai da vaga: ela volta à sugestão
+    // automática, se esse jogador sugerido ainda não estiver em campo.
+    const validos = new Set(atletasConsiderados.map(a => a.id));
+    ordem = ordem.map(id => (id && !validos.has(id)) ? undefined : id);
+    const emUso = new Set(ordem.filter(Boolean));
+    ordem = ordem.map((id, i) => {
+      if (id !== undefined) return id;
+      const sug = atribuido[i];
+      if (sug && !emUso.has(sug)){ emUso.add(sug); return sug; }
+      return null;
+    });
+  }
   const linhasHtml = (() => {
     let cursor = 0;
     return linhas.map(linha => {
@@ -479,7 +506,7 @@ export function renderEscalacaoIdeal(root, state){
           cards.push(`
             <div class="pitch-player${selecionada ? " selecionado" : ""}" data-slot-idx="${slotIdx}" title="Toque pra trocar de posição">
               <div class="dot">${atleta?.numero ?? "•"}</div>
-              <div class="nm">${escapeHtml(atleta?.nome || "?")} <span style="opacity:.65; font-weight:400;">(${escapeHtml(abrevPosicao(info.posicaoJogada))})</span></div>
+              <div class="nm">${escapeHtml(atleta?.nome || "?")} <span style="opacity:.65; font-weight:400;">(${escapeHtml(abrevPosicao(posicaoNaVaga(linha, i, info, atleta)))})</span></div>
               <div class="nota">${fmt1(info.media)}</div>
             </div>`);
         } else {
@@ -662,15 +689,14 @@ export function renderEscalacaoIdeal(root, state){
   // Trocar formação, período ou a seleção de jogadores invalida qualquer
   // arranjo manual feito até então — a sugestão automática é recalculada do zero.
   $("#sel-formacao", root)?.addEventListener("change", (e) => { formacaoAtual = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
-  $("#sel-modo", root)?.addEventListener("change", (e) => { soConfirmados = e.target.value === "conf"; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
-  $("#sel-criterio", root)?.addEventListener("change", (e) => { criterio = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
-  $("#filtro-ano", root)?.addEventListener("change", (e) => { filtroAno = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
-  $("#filtro-mes", root)?.addEventListener("change", (e) => { filtroMes = e.target.value; resetArranjoManual(); reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
+  $("#sel-modo", root)?.addEventListener("change", (e) => { soConfirmados = e.target.value === "conf"; reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
+  $("#sel-criterio", root)?.addEventListener("change", (e) => { criterio = e.target.value; reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
+  $("#filtro-ano", root)?.addEventListener("change", (e) => { filtroAno = e.target.value; reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
+  $("#filtro-mes", root)?.addEventListener("change", (e) => { filtroMes = e.target.value; reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state)); });
   $$("[data-excluir]", root).forEach(chk => {
     chk.addEventListener("change", (e) => {
       const id = e.target.dataset.excluir;
       if (e.target.checked) excluidos.delete(id); else excluidos.add(id);
-      resetArranjoManual();
       reRenderKeepingFocus(root, () => renderEscalacaoIdeal(root, state));
     });
   });
@@ -728,7 +754,7 @@ export function renderEscalacaoIdeal(root, state){
         const info = criterio === "cadastro"
           ? { posicaoJogada: atleta?.posicao || "", media: geral[id] ?? null }
           : melhorParaLinha(id, { positions: linha.slots[i] }, notasPos, atletasConsiderados, jogosFiltrados);
-        jogadores.push({ nome: atleta?.nome || "?", numero: atleta?.numero ?? null, pos: abrevPosicao(info.posicaoJogada || ""), nota: info.media ?? null });
+        jogadores.push({ nome: atleta?.nome || "?", numero: atleta?.numero ?? null, pos: abrevPosicao(posicaoNaVaga(linha, i, info, atleta)), nota: info.media ?? null });
       }
       cursor += linha.slots.length;
       return { label: linha.label, jogadores };
