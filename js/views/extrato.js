@@ -1,4 +1,5 @@
 import { TEAM, hashtags } from "../tenant.js";
+import { filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 import { $, escapeHtml, formatDate, fmt1, avg } from "../utils.js";
 import {
   ehJogador, jogosRealizados, normalizeEscalacao, idsDaPartida, posicaoJogadaNoJogo, statsPorAtleta,
@@ -12,6 +13,7 @@ let filtroAno = "";
 // de cada jogo é aberta a todos; o detalhe de "quem deu qual nota" só
 // aparece pra quem está logado com conta autorizada.
 export function renderExtrato(root, state, atletaId){
+  wireQuadroChips(root, () => renderExtrato(root, state, atletaId));
   const jogadores = state.atletas.filter(ehJogador)
     .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
   const atleta = jogadores.find(a => a.id === atletaId) || null;
@@ -20,7 +22,7 @@ export function renderExtrato(root, state, atletaId){
     `<option value="${a.id}" ${atleta && a.id === atleta.id ? "selected" : ""}>${escapeHtml(a.nome)}${a.ativo === false ? " (inativo)" : ""}</option>`
   ).join("");
 
-  const anos = [...new Set(jogosRealizados(state.jogos).map(j => (j.data || "").slice(0, 4)).filter(Boolean))].sort().reverse();
+  const anos = [...new Set(jogosRealizados(filtrarPorQuadro(state.jogos)).map(j => (j.data || "").slice(0, 4)).filter(Boolean))].sort().reverse();
   if (filtroAno && !anos.includes(filtroAno)) filtroAno = "";
 
   let corpo = `<div class="empty-state"><h3>Escolha um jogador</h3><p>Selecione um atleta acima para ver o extrato dele.</p></div>`;
@@ -33,6 +35,7 @@ export function renderExtrato(root, state, atletaId){
         <h1>Extrato do jogador</h1>
       </div>
     </div>
+    ${quadroChipsHtml(state.jogos)}
     <div class="form-grid" style="max-width:480px; margin-bottom:20px;">
       <div class="field">
         <label>Jogador</label>
@@ -104,7 +107,7 @@ function graficoNotas(pontosNota, media){
 }
 
 function extratoHtml(atleta, state, ano){
-  const realizados = jogosRealizados(state.jogos).filter(j => !ano || (j.data || "").startsWith(ano));
+  const realizados = jogosRealizados(filtrarPorQuadro(state.jogos)).filter(j => !ano || (j.data || "").startsWith(ano));
   const nomeAtleta = (id) => state.atletas.find(a => a.id === id)?.nome || "?";
   const nomeAdv = (id) => state.adversarios.find(a => a.id === id)?.nome || "?";
 
