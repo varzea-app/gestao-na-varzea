@@ -1,4 +1,5 @@
 import { TEAM, hashtags } from "../tenant.js";
+import { filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, formatDate, fmt1, reRenderKeepingFocus } from "../utils.js";
 import { statsPorAtleta, ehJogador } from "../stats.js";
@@ -99,7 +100,8 @@ function abrirImagemRanking(top5, metricLabel, periodoLabel, votantesLabel, metr
 }
 
 export function renderRanking(root, state){
-  const realizados = [...state.jogos]
+  wireQuadroChips(root, () => renderRanking(root, state));
+  const realizados = [...filtrarPorQuadro(state.jogos)]
     .filter(j => j.status === "realizado")
     .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
@@ -170,6 +172,7 @@ export function renderRanking(root, state){
       </button>` : ""}
     </div>
 
+    ${quadroChipsHtml(state.jogos)}
     <div class="rank-chips">
       ${METRICAS.map(m => `<button class="rank-chip ${m.key === activeMetric ? "active" : ""}" data-metric="${m.key}" type="button">${escapeHtml(m.label)}</button>`).join("")}
     </div>
