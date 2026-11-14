@@ -1,7 +1,7 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { $, $$, escapeHtml, openModal, closeModal, toast, formatDateLong, formatDate, avg, fmt1 } from "../utils.js";
 import { saveDoc } from "../db.js";
-import { notasDoAtletaNoJogo, resultadoJogo, desempateJogo, GOL_CONTRA_ID, posicaoJogadaNoJogo, normalizeEscalacao } from "../stats.js";
+import { notasDoAtletaNoJogo, resultadoJogo, desempateJogo, GOL_CONTRA_ID, posicaoJogadaNoJogo, normalizeEscalacao, idsDaPartida, rotuloQuadro } from "../stats.js";
 
 // Imagem (flyer) da partida pra compartilhar no WhatsApp: modelo "Convite"
 // (antes do jogo) e "Resultado" (depois). O escudo do adversário é enviado
@@ -109,7 +109,7 @@ function resumoJogo(jogo, atletas){
     .filter(x => x.nota !== null)
     .sort((a, b) => b.nota - a.nota);
   if (ranking.length === 0){
-    const ids = new Set([...normalizeEscalacao(jogo.escalacaoInicial), ...normalizeEscalacao(jogo.escalacaoFinal)].map(e => e.atletaId));
+    const ids = idsDaPartida(jogo);
     ranking = [...ids].map(id => ({ id, nome: nome(id), nota: null })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }
   const infoJogador = (id) => ({
@@ -124,7 +124,7 @@ function resumoJogo(jogo, atletas){
 function legendaTexto(modelo, { jogo, adv, campo, resumo }){
   const advNome = adv?.nome || "Adversário";
   const linhas = [];
-  const dados = [`🆚 ${TEAM.nome} x ${advNome}`, `📅 ${formatDateLong(jogo.data)}`];
+  const dados = [`🆚 ${TEAM.nome}${rotuloQuadro(jogo) ? ` (${rotuloQuadro(jogo)})` : ""} x ${advNome}`, `📅 ${formatDateLong(jogo.data)}`];
   if (modelo === "convite"){
     linhas.push("Partida Confirmada! ⚽🔥", "");
     if (jogo.horario) dados.push(`⏰ ${jogo.horario}`);
