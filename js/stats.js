@@ -63,27 +63,69 @@ export function rankingGolsAssistencias(atletas, jogos){
     .sort((a, b) => (b.gols + b.assistencias) - (a.gols + a.assistencias) || b.gols - a.gols);
 }
 
-// Atletas que estiveram escalados numa partida (inicial ou final), sem duplicar.
-export function jogadoresDaPartida(jogo, atletas){
-  const ids = new Set([
-    ...normalizeEscalacao(jogo.escalacaoInicial).map(e => e.atletaId),
-    ...normalizeEscalacao(jogo.escalacaoFinal).map(e => e.atletaId),
+// Ids de todos os atletas "da partida": relacionados (futsal, dois quadros),
+// escalação inicial e escalação final, sem duplicar. Todo relacionado conta
+// como 1 jogo disputado, mesmo sem nota.
+export function idsDaPartida(jogo){
+  return new Set([
+    ...(jogo?.relacionados || []),
+    ...normalizeEscalacao(jogo?.escalacaoInicial).map(e => e.atletaId),
+    ...normalizeEscalacao(jogo?.escalacaoFinal).map(e => e.atletaId),
   ]);
+}
+
+// Atletas que estiveram na partida (relacionados, inicial ou final).
+export function jogadoresDaPartida(jogo, atletas){
+  const ids = idsDaPartida(jogo);
   return atletas.filter(a => ids.has(a.id) && ehJogador(a));
 }
 
-// Quantidade de partidas realizadas em que o atleta esteve escalado
-// (na inicial ou na final), independente de ter marcado gol/assistência.
+// Quantidade de partidas realizadas em que o atleta esteve na partida
+// (relacionado, inicial ou final), independente de ter marcado gol/assistência.
 export function contagemJogosPorAtleta(jogos){
   const map = {};
   jogosRealizados(jogos).forEach(j => {
-    const ids = new Set([
-      ...normalizeEscalacao(j.escalacaoInicial).map(e => e.atletaId),
-      ...normalizeEscalacao(j.escalacaoFinal).map(e => e.atletaId),
-    ]);
-    ids.forEach(id => { map[id] = (map[id] || 0) + 1; });
+    idsDaPartida(j).forEach(id => { map[id] = (map[id] || 0) + 1; });
   });
   return map;
+}
+
+// ----------------------------------------------------------------------------
+// Futsal: dois quadros no mesmo dia
+// ----------------------------------------------------------------------------
+
+// jogo.quadro: "1" | "2" | "" (sem quadro). O time tem sempre o mesmo nome;
+// só a identificação muda ("1º quadro" / "2º quadro").
+export function rotuloQuadro(jogo){
+  return jogo?.quadro === "1" ? "1º quadro" : jogo?.quadro === "2" ? "2º quadro" : "";
+}
+
+// Agrupa jogos em "confrontos": jogos com quadro, do mesmo dia e contra o mesmo
+// adversário, viram 1 confronto (placares somados). Jogos sem quadro, ou contra
+// adversários diferentes, são confrontos de 1 jogo. Cada confronto traz:
+// { chave, data, adversarioId, campoId, jogos[], placarNos, placarAdversario,
+//   resultado, parcial, id } — "parcial" = há jogo do grupo ainda sem placar
+// (agendado); nesse caso o placar soma só o que já foi jogado.
+export function agruparConfrontos(jogos){
+  const grupos = new Map();
+  jogos.forEach(j => {
+    const chave = j.quadro ? `${j.data || ""}|${j.adversarioId || ""}` : `solo|${j.id}`;
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(j);
+  });
+  return [...grupos.entries()].map(([chave, js]) => {
+    js.sort((a, b) => (a.quadro || "").localeCompare(b.quadro || "") || (a.horario || "").localeCompare(b.horario || ""));
+    const jogados = js.filter(j => j.status === "realizado" && typeof j.placarNos === "number" && typeof j.placarAdversario === "number");
+    const nos = jogados.reduce((t, j) => t + j.placarNos, 0);
+    const eles = jogados.reduce((t, j) => t + j.placarAdversario, 0);
+    const base = js[0];
+    return {
+      chave, id: base.id, data: base.data, adversarioId: base.adversarioId, campoId: base.campoId,
+      jogos: js, placarNos: jogados.length ? nos : null, placarAdversario: jogados.length ? eles : null,
+      resultado: jogados.length ? (nos > eles ? "vitoria" : nos < eles ? "derrota" : "empate") : null,
+      parcial: jogados.length < js.length,
+    };
+  });
 }
 
 // Estatísticas combinadas de cada atleta (jogos, gols, assistências, nota
@@ -305,8 +347,11 @@ export function resumoGeral(jogos){
     else if (r === "empate") empates++;
     else if (r === "derrota") derrotas++;
   });
+  const confrontos = agruparConfrontos(realizados);
   return {
     qtdJogos: realizados.length,
+    qtdConfrontos: confrontos.length,
+    temQuadros: realizados.some(j => !!j.quadro),
     qtdGols: totalGols(jogos),
     qtdAssistencias: totalAssistencias(jogos),
     mediaJogadores: mediaGeralJogadores(jogos),
