@@ -1,6 +1,6 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { $, $$, escapeHtml, formatDate, formatDateLong, openModal, closeModal, fmt1, avg, reRenderKeepingFocus, toast } from "../utils.js";
-import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID } from "../stats.js";
+import { resultadoJogo, desempateJogo, normalizeEscalacao, notasDoAtletaNoJogo, jogosRealizados, mediaNotaJogadoresNoJogo, GOL_CONTRA_ID, agruparConfrontos, rotuloQuadro } from "../stats.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
 import { abrevPosicao } from "./escalacao-ideal.js";
 import { ordemPosicao } from "../modalidade.js";
@@ -54,7 +54,7 @@ export function renderHistorico(root, state, subId){
   const manchete = realizados.length ? `
     <div class="manchete">
       <div class="manchete-eyebrow">${escapeHtml(periodoTxt)}</div>
-      <div class="manchete-titulo">${plural(realizados.length, "partida", "partidas")}: ${plural(cont.vitoria, "vitória", "vitórias")}, ${plural(cont.empate, "empate", "empates")} e ${plural(cont.derrota, "derrota", "derrotas")}</div>
+      <div class="manchete-titulo">${plural(realizados.length, "partida", "partidas")}${realizados.some(j => j.quadro) ? ` em ${plural(agruparConfrontos(realizados).length, "confronto", "confrontos")}` : ""}: ${plural(cont.vitoria, "vitória", "vitórias")}, ${plural(cont.empate, "empate", "empates")} e ${plural(cont.derrota, "derrota", "derrotas")}</div>
       <div class="manchete-sub">${plural(gp, "gol marcado", "gols marcados")} e ${gc} sofrido${gc === 1 ? "" : "s"}${goleada ? ` · maior vitória: ${goleada.placarNos} x ${goleada.placarAdversario} contra ${escapeHtml(nomeAdv(goleada.adversarioId))}` : ""}${melhorNota ? ` · melhor atuação coletiva: nota ${fmt1(nota(melhorNota))} contra ${escapeHtml(nomeAdv(melhorNota.adversarioId))}` : ""}</div>
     </div>` : "";
 
@@ -70,7 +70,7 @@ export function renderHistorico(root, state, subId){
       <div class="hist-card" data-id="${j.id}">
         <div class="hist-res ${info ? info.cls : ""}" title="${info ? info.nome : ""}">${info ? info.letra : "—"}</div>
         <div class="hist-info">
-          <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}</div>
+          <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}${rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : ""}</div>
           <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId))}${desempateJogo(j) ? ` · ${escapeHtml(desempateJogo(j).texto)}` : ""}</div>
           ${golsTxt ? `<div class="hist-gols">⚽ ${escapeHtml(golsTxt)}</div>` : ""}
         </div>
