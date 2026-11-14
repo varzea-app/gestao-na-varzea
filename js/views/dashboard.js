@@ -97,7 +97,9 @@ export function renderDashboard(root, state){
   const saldo = saldoGols(realizadosFiltrados);
   const pctAssistencia = r.qtdGols > 0 ? Math.round((r.qtdAssistencias / r.qtdGols) * 100) : 0;
   const jogadores = state.atletas.filter(ehJogador);
-  const ultimos5 = [...realizadosFiltrados].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 5);
+  // No Geral com quadros, os dois quadros do mesmo dia e adversário viram 1 confronto (placar somado).
+  const recentes = (lista) => (porConfronto ? jogosPorConfronto(lista) : [...lista]).sort((a, b) => ordemCronologica(b, a));
+  const ultimos5 = recentes(realizadosFiltrados).slice(0, 5);
 
   // Destaques do período (seguem o filtro de ano/mês).
   const statsPeriodo = statsPorAtleta(jogadores, realizadosFiltrados);
@@ -113,11 +115,9 @@ export function renderDashboard(root, state){
   ];
 
   // Forma recente: últimos 10 realizados (sem filtro), do mais antigo ao mais novo.
-  const recentesDesc = [...todosRealizados].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 10);
+  const recentesDesc = recentes(todosRealizados).slice(0, 10);
   // No Geral com quadros, a sequência (vitórias seguidas etc.) também é por confronto.
-  const sequencia = textoSequencia(porConfronto
-    ? jogosPorConfronto(todosRealizados).sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 10)
-    : recentesDesc);
+  const sequencia = textoSequencia(recentesDesc);
 
   // Destaque do mês: último mês com notas lançadas.
   const meses = [...new Set(todosRealizados.map(j => (j.data || "").slice(0, 7)).filter(m => m.length === 7))].sort().reverse();
@@ -220,7 +220,7 @@ export function renderDashboard(root, state){
 
     <div class="card card-pad dash-forma">
       <div>
-        <div class="card-sub" style="margin-bottom:6px;">Forma recente (últimos ${recentesDesc.length} jogos)</div>
+        <div class="card-sub" style="margin-bottom:6px;">Forma recente (últimos ${recentesDesc.length} ${porConfronto ? "confrontos" : "jogos"})</div>
         <div class="dash-dots">${[...recentesDesc].reverse().map(j => { const r = resultadoJogo(j); return `<span data-goto="${j.id}" style="cursor:pointer;" title="${escapeHtml(tituloPlacar(j, advTexto(j.adversarioId)))}">${r ? RESULTADO_BADGE[r] : "—"}</span>`; }).join("")}</div>
       </div>
       ${sequencia ? `<div class="dash-seq"><div class="dash-seq-val">${sequencia}</div><div class="card-sub" style="margin:0;">sequência atual</div></div>` : ""}
@@ -245,7 +245,7 @@ export function renderDashboard(root, state){
 
     <div class="dash-bottom">
       <div class="card card-pad">
-        <div class="card-title">Últimos 5 confrontos</div>
+        <div class="card-title">${porConfronto || !todosRealizados.some(j => j.quadro) ? "Últimos 5 confrontos" : "Últimas 5 partidas"}</div>
         <div class="card-sub">Resultados mais recentes</div>
         ${ultimos5.length === 0 ? `<p style="color:var(--ink-faint); font-size:13px;">Nenhuma partida realizada ainda.</p>` : ultimos5.map(j => {
           const res = resultadoJogo(j);
