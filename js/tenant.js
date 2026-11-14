@@ -255,27 +255,65 @@ export function aplicarMarca(){
   document.querySelectorAll(".brand-name, .mobile-topbar-brand span").forEach(el => { el.textContent = TEAM.nomeUpper; });
   document.querySelectorAll(".brand-crest-img, .mobile-topbar-brand img").forEach(el => { el.src = TEAM.escudo; el.alt = TEAM.nome; });
 
-  // Ícone da aba / "adicionar à tela inicial".
+  // Ícone da aba / "adicionar à tela inicial" / app instalável: o escudo do time.
+  // Primeiro o escudo como está (aparece na hora); depois, quando as imagens quadradas
+  // com fundo ficam prontas, elas substituem (iPhone e Android preferem PNG opaco).
   definirLink("icon", TEAM.escudo);
   definirLink("apple-touch-icon", TEAM.escudo);
+  definirManifesto(P, [
+    { src: absoluto(TEAM.escudo), sizes: "192x192", type: tipoImagem(TEAM.escudo), purpose: "any" },
+    { src: absoluto(TEAM.escudo), sizes: "512x512", type: tipoImagem(TEAM.escudo), purpose: "any" },
+  ]);
+  montarIconesDoTime(P).catch(() => { /* fica com o escudo simples acima */ });
+}
 
-  // Manifesto do app instalável gerado na hora, com o nome e o escudo do time.
-  // (Melhor esforço: o Chrome do Android respeita; no iPhone vale o ícone acima.)
+const absoluto = (u) => /^data:|^https?:/.test(u) ? u : new URL(u, location.href).href;
+const tipoImagem = (u) => u.startsWith("data:image/svg") ? "image/svg+xml" : "image/png";
+
+// Manifesto do app instalável gerado na hora, com o nome e o ícone do time.
+// (O Chrome do Android usa; no iPhone vale o apple-touch-icon.)
+function definirManifesto(P, icons){
   try{
     const base = location.origin + location.pathname;
-    const abs = (u) => /^data:|^https?:/.test(u) ? u : new URL(u, location.href).href;
     const manifesto = {
       name: `${TEAM.nome} — Gestão do Time`, short_name: TEAM.nome.slice(0, 12),
       start_url: `${base}?time=${TEAM.id}#dashboard`, scope: base, display: "standalone",
-      background_color: P, theme_color: P,
-      icons: [
-        { src: abs(TEAM.escudo), sizes: "192x192", type: TEAM.escudo.startsWith("data:image/svg") ? "image/svg+xml" : "image/png", purpose: "any" },
-        { src: abs(TEAM.escudo), sizes: "512x512", type: TEAM.escudo.startsWith("data:image/svg") ? "image/svg+xml" : "image/png", purpose: "any" },
-      ],
+      background_color: P, theme_color: P, icons,
     };
     const blob = new Blob([JSON.stringify(manifesto)], { type: "application/manifest+json" });
     definirLink("manifest", URL.createObjectURL(blob));
   }catch(err){ /* sem manifesto dinâmico, o app continua funcionando */ }
+}
+
+// Desenha o escudo centralizado sobre a cor do time e devolve um PNG quadrado.
+async function iconeQuadrado(src, lado, fundo, folga){
+  const img = await new Promise((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = erro; i.src = src; });
+  const c = document.createElement("canvas"); c.width = c.height = lado;
+  const x = c.getContext("2d");
+  x.fillStyle = fundo; x.fillRect(0, 0, lado, lado);
+  const area = lado * (1 - 2 * folga);
+  const nw = img.naturalWidth || area, nh = img.naturalHeight || area;
+  const esc = Math.min(area / nw, area / nh);
+  const w = nw * esc, h = nh * esc;
+  x.imageSmoothingQuality = "high";
+  x.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h);
+  return c.toDataURL("image/png");
+}
+
+async function montarIconesDoTime(P){
+  const [i180, i192, i512, m512] = await Promise.all([
+    iconeQuadrado(TEAM.escudo, 180, P, 0.08),
+    iconeQuadrado(TEAM.escudo, 192, P, 0.08),
+    iconeQuadrado(TEAM.escudo, 512, P, 0.08),
+    iconeQuadrado(TEAM.escudo, 512, P, 0.2),   // "maskable": o Android pode recortar as bordas
+  ]);
+  definirLink("apple-touch-icon", i180);
+  definirLink("icon", i192);
+  definirManifesto(P, [
+    { src: i192, sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: i512, sizes: "512x512", type: "image/png", purpose: "any" },
+    { src: m512, sizes: "512x512", type: "image/png", purpose: "maskable" },
+  ]);
 }
 
 // ----------------------------------------------------------------------------
