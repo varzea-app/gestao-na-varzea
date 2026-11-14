@@ -534,9 +534,38 @@ export function estruturaFlyer(tema, formato){
   return { T, A, W, H, base, cantos, topo, rodape };
 }
 
-export function openImagemModal({ titulo, render, legenda, comFoto = false, selecao = null, arquivo = "imagem" }){
-  let tema = "noite", formato = "feed", foto = "";
+// Molduras opcionais (desenhadas por cima do fundo, na cor de destaque do fundo escolhido).
+export const MOLDURAS = {
+  nenhuma: "Nenhuma (só a do fundo)",
+  simples: "Linha simples",
+  dupla: "Linha dupla",
+  cantos: "Cantos",
+  faixas: "Faixas no topo e na base",
+};
+export function molduraHtml(id, A){
+  const abs = "position:absolute; pointer-events:none; box-sizing:border-box;";
+  if (id === "simples") return `<div style="${abs} left:30px; right:30px; top:30px; bottom:30px; border:6px solid ${A}; border-radius:30px;"></div>`;
+  if (id === "dupla") return `<div style="${abs} left:22px; right:22px; top:22px; bottom:22px; border:10px solid ${A}; border-radius:34px;"></div>
+    <div style="${abs} left:46px; right:46px; top:46px; bottom:46px; border:3px solid ${A}; border-radius:22px;"></div>`;
+  if (id === "cantos"){
+    const c = (v, h) => `<div style="${abs} ${v}:34px; ${h}:34px; width:150px; height:150px; border-${v}:12px solid ${A}; border-${h}:12px solid ${A}; border-${v}-${h}-radius:18px;"></div>`;
+    return c("top", "left") + c("top", "right") + c("bottom", "left") + c("bottom", "right");
+  }
+  if (id === "faixas") return `<div style="${abs} left:0; right:0; top:0; height:30px; background:${A};"></div>
+    <div style="${abs} left:0; right:0; top:42px; height:6px; background:${A};"></div>
+    <div style="${abs} left:0; right:0; bottom:0; height:30px; background:${A};"></div>
+    <div style="${abs} left:0; right:0; bottom:42px; height:6px; background:${A};"></div>`;
+  return "";
+}
+
+// extras (opcional): { moldura: true, frase: "placeholder", legendaEditavel: true }
+//  - moldura: seletor de moldura | frase: texto livre na imagem | legendaEditavel: caixa de legenda
+//    editável (o que for escrito ali é o que o botão "Copiar legenda" copia).
+export function openImagemModal({ titulo, render, legenda, comFoto = false, selecao = null, arquivo = "imagem", extras = {} }){
+  let tema = "noite", formato = "feed", foto = "", moldura = "nenhuma", frase = "";
   let selId = selecao?.padrao || "";
+  let modeloId = extras.modelo?.padrao || "";
+  let legendaEditada = false;
 
   openModal(`
     <div class="modal-head">
@@ -552,8 +581,16 @@ export function openImagemModal({ titulo, render, legenda, comFoto = false, sele
         ${selecao ? `<div class="field"><label>${escapeHtml(selecao.label)}</label>
           <select id="gm-sel">${selecao.opcoes.map(o => `<option value="${escapeHtml(o.value)}" ${o.value === selId ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}</select></div>` : ""}
         ${comFoto ? `<div class="field"><label>Foto do jogador (não é salva)</label><input type="file" id="gm-foto" accept="image/*"></div>` : ""}
+        ${extras.modelo ? `<div class="field"><label>${escapeHtml(extras.modelo.label)}</label>
+          <select id="gm-modelo">${extras.modelo.opcoes.map(o => `<option value="${escapeHtml(o.value)}" ${o.value === modeloId ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}</select></div>` : ""}
+        ${extras.moldura ? `<div class="field"><label>Moldura</label>
+          <select id="gm-moldura">${Object.entries(MOLDURAS).map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select></div>` : ""}
+        ${extras.frase ? `<div class="field" style="grid-column:1 / -1;"><label>Frase na imagem (opcional)</label>
+          <input type="text" id="gm-frase" maxlength="70" placeholder="${escapeHtml(typeof extras.frase === "string" ? extras.frase : "Ex.: Bora pra cima!")}"></div>` : ""}
       </div>
       <div id="gm-prev-wrap" style="width:100%; max-width:420px; margin:0 auto; overflow:hidden; border-radius:10px; background:#111;"><div id="gm-prev" style="transform-origin:top left;"></div></div>
+      ${extras.legendaEditavel ? `<div class="field" style="margin-top:14px;"><label>Legenda para postar (você pode editar)</label>
+        <textarea id="gm-legenda-txt" rows="7" style="width:100%; font-size:13px;"></textarea></div>` : ""}
       <div class="form-actions" style="margin-top:14px;">
         <button type="button" class="btn btn-ghost" data-close>Fechar</button>
         <button type="button" class="btn btn-ghost" id="gm-legenda">Copiar legenda</button>
@@ -564,7 +601,13 @@ export function openImagemModal({ titulo, render, legenda, comFoto = false, sele
   `, { wide: true });
   $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
 
-  const montar = () => render({ ...estruturaFlyer(tema, formato), tema, formato, foto, selecaoId: selId });
+  const montar = () => {
+    const est = estruturaFlyer(tema, formato);
+    est.cantos = (est.cantos || "") + molduraHtml(moldura, est.A);
+    return render({ ...est, tema, formato, foto, selecaoId: selId, modeloId, moldura, frase: frase.trim() });
+  };
+  const textoLegenda = () => (typeof legenda === "function" ? legenda(selId, { frase: frase.trim() }) : legenda);
+  const atualizarLegenda = () => { const t = $("#gm-legenda-txt"); if (t && !legendaEditada) t.value = textoLegenda(); };
   const desenhar = () => {
     const prev = $("#gm-prev");
     prev.innerHTML = montar();
@@ -574,10 +617,15 @@ export function openImagemModal({ titulo, render, legenda, comFoto = false, sele
     wrap.style.height = `${(formato === "story" ? 1920 : 1350) * k}px`;
   };
   desenhar();
+  atualizarLegenda();
+  $("#gm-legenda-txt")?.addEventListener("input", () => { legendaEditada = true; });
+  $("#gm-moldura")?.addEventListener("change", (e) => { moldura = e.target.value; desenhar(); });
+  $("#gm-modelo")?.addEventListener("change", (e) => { modeloId = e.target.value; desenhar(); });
+  $("#gm-frase")?.addEventListener("input", (e) => { frase = e.target.value; desenhar(); atualizarLegenda(); });
 
   $("#gm-tema").addEventListener("change", (e) => { tema = e.target.value; desenhar(); });
   $("#gm-formato").addEventListener("change", (e) => { formato = e.target.value; desenhar(); });
-  $("#gm-sel")?.addEventListener("change", (e) => { selId = e.target.value; foto = ""; const f = $("#gm-foto"); if (f) f.value = ""; desenhar(); });
+  $("#gm-sel")?.addEventListener("change", (e) => { selId = e.target.value; foto = ""; const f = $("#gm-foto"); if (f) f.value = ""; desenhar(); atualizarLegenda(); });
   $("#gm-foto")?.addEventListener("change", async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -608,7 +656,7 @@ export function openImagemModal({ titulo, render, legenda, comFoto = false, sele
   };
 
   $("#gm-legenda").addEventListener("click", async () => {
-    try{ await navigator.clipboard.writeText(typeof legenda === "function" ? legenda(selId) : legenda); toast("Legenda copiada.", "ok"); }
+    try{ await navigator.clipboard.writeText($("#gm-legenda-txt")?.value ?? textoLegenda()); toast("Legenda copiada.", "ok"); }
     catch(err){ toast("Não foi possível copiar a legenda.", "err"); }
   });
   $("#gm-baixar").addEventListener("click", async (e) => {

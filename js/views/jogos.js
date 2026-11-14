@@ -8,6 +8,7 @@ import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA
 
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
+import { abrirImagemConfirmados } from "./imagem-confirmados.js";
 import { modoJogoLiberado } from "./modo-jogo.js";
 import { MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 
@@ -424,6 +425,7 @@ export function renderJogoDetail(root, state, jogoId){
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
         ${jogo.status !== "realizado" && modoJogoLiberado(jogo) ? `<button class="btn btn-gold" id="btn-modojogo">⚽ Modo jogo</button>` : ""}
         <button class="btn btn-ghost" id="btn-flyer"${off("flyer")}>Gerar imagem</button>
+        ${jogo.status !== "realizado" && state.isAuthorized ? `<button class="btn btn-ghost" id="btn-img-confirmados"${off("flyer")}>Imagem dos confirmados</button>` : ""}
         <button class="btn btn-ghost" id="btn-presenca-link"${off("presenca")}>Copiar link de presença</button>
         <button class="btn btn-ghost" id="btn-presenca"${off("presenca")}>Ver presença</button>
         ${ehFutsal() && jogo.quadro ? `<button class="btn btn-ghost" id="btn-outro-quadro">+ ${jogo.quadro === "1" ? "2º" : "1º"} quadro</button>` : ""}
@@ -481,6 +483,7 @@ export function renderJogoDetail(root, state, jogoId){
 
   $("#btn-edit-jogo").addEventListener("click", () => openJogoForm(state, jogo));
   $("#btn-flyer").addEventListener("click", () => openFlyerModal(state, jogo));
+  $("#btn-img-confirmados")?.addEventListener("click", () => abrirImagemConfirmados(state, jogo, presencasJogo));
   $("#btn-modojogo")?.addEventListener("click", () => { location.hash = `#modojogo/${jogo.id}`; });
   $("#btn-presenca").addEventListener("click", () => { location.hash = `#presenca/${jogo.id}`; });
   $("#btn-presenca-link").addEventListener("click", async () => {

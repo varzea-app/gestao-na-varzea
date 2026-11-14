@@ -2,6 +2,8 @@ import { TEAM, hashtags, linkDoTime } from "../tenant.js";
 import { $, $$, escapeHtml, toast, formatDateLong } from "../utils.js";
 import { listenPresencas, setPresenca } from "../db.js";
 import { ehJogador } from "../stats.js";
+import { temRecurso } from "../planos.js";
+import { abrirImagemConfirmados } from "./imagem-confirmados.js";
 
 // Confirmação de presença — tela pública (sem login). O jogador abre o link
 // do jogo, acha o próprio nome e toca em Vou / Talvez / Não vou.
@@ -124,6 +126,7 @@ function desenhar(root, state, jogoId){
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin:14px 0;">
         <button class="btn btn-ghost btn-sm" id="btn-copiar-convite">Copiar convite (WhatsApp)</button>
         <button class="btn btn-ghost btn-sm" id="btn-copiar-pendentes">Copiar lista de quem não respondeu</button>
+        ${temRecurso("flyer") && jogo.status !== "realizado" ? `<button class="btn btn-ghost btn-sm" id="btn-img-confirmados">Gerar imagem dos confirmados</button>` : ""}
       </div>` : ""}
 
     <h2 style="font-size:18px; margin:14px 0 10px;">Jogadores</h2>
@@ -156,6 +159,7 @@ function desenhar(root, state, jogoId){
     if (jogo.tipoPartida) dados.push(`🏷️ ${jogo.tipoPartida}`);
     return dados.join("\n");
   };
+  $("#btn-img-confirmados", root)?.addEventListener("click", () => abrirImagemConfirmados(state, jogo, presencas));
   $("#btn-copiar-convite", root)?.addEventListener("click", () => copiar(
     `⚽ Bora confirmar presença!\n\n${dadosPartida()}\n\n👉 Confirme pelo link:\n${linkPresenca(jogoId)}`,
     "Convite copiado."));
