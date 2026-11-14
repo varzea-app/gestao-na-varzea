@@ -9,7 +9,7 @@ import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
 import { modoJogoLiberado } from "./modo-jogo.js";
-import { MESES } from "../filters.js";
+import { MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 
 // Esconde um elemento quando o plano do time não inclui o recurso.
 const off = (recurso) => temRecurso(recurso) ? "" : ' style="display:none"';
@@ -75,7 +75,10 @@ function openJogoForm(state, item, onSaved, prefill){
     </div>
     <div class="modal-body">
       <form id="jogo-form">
+        ${!isEdit && ehFutsal() ? `<label style="display:flex; align-items:center; gap:8px; margin-bottom:14px; font-weight:600; cursor:pointer;"><input type="checkbox" id="dois-quadros"> Cadastrar os 2 quadros de uma vez (2º e 1º quadro)</label>` : ""}
         <div class="form-grid">${fields.map(f => fieldHtml(f, valores)).join("")}</div>
+        ${!isEdit && ehFutsal() ? `<div class="field" id="field-horario-q1" style="display:none; max-width:240px; margin-top:12px;"><label>Horário do 1º quadro</label><input type="time" name="horario1"></div>
+        <p class="field-hint" id="hint-dois-quadros" style="display:none;">Serão criados 2 jogos agendados, mesmo dia, adversário e campo: o 2º quadro (joga primeiro) e o 1º quadro. Placar e resultado você lança depois, em cada jogo.</p>` : ""}
         <div class="form-actions" style="justify-content:space-between;">
           ${isEdit ? `<button type="button" class="btn btn-danger" id="btn-delete-jogo">Excluir jogo</button>` : `<span></span>`}
           <div style="display:flex; gap:8px;">
@@ -100,9 +103,47 @@ function openJogoForm(state, item, onSaved, prefill){
   formEl.elements["decisao"].addEventListener("change", atualizarDecisao);
   atualizarDecisao();
 
+  // Futsal: "2 quadros de uma vez" esconde o que é específico de um jogo
+  // (quadro, status, placar, desempate) e pede o horário do 1º quadro.
+  const chkDois = $("#dois-quadros");
+  const ocultaveis = ["quadro", "status", "placarNos", "placarAdversario", "decisao", "penaltisNos", "penaltisAdversario", "criterioVencedor", "criterioMotivo"];
+  const atualizarDois = () => {
+    const on = !!chkDois?.checked;
+    ocultaveis.forEach(n => { const c = campoDe(n); if (c) c.style.display = on ? "none" : ""; });
+    if (!on) atualizarDecisao();
+    const lbl = campoDe("horario")?.querySelector("label");
+    if (lbl) lbl.textContent = on ? "Horário do 2º quadro" : "Horário";
+    $("#field-horario-q1").style.display = on ? "" : "none";
+    $("#hint-dois-quadros").style.display = on ? "" : "none";
+  };
+  chkDois?.addEventListener("change", atualizarDois);
+
   $("#jogo-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = collectFormData(fields, e.target);
+    if (chkDois?.checked){
+      // Dois jogos de uma vez: 2º quadro (joga primeiro) e 1º quadro, agendados.
+      const base = {
+        ...data, status: "agendado", placarNos: null, placarAdversario: null, decisao: "", penaltisNos: null, penaltisAdversario: null,
+        criterioVencedor: "", criterioMotivo: "",
+        escalacaoInicial: [], escalacaoFinal: [], relacionados: [], golsAssistencias: [], avaliacoesJogadores: {},
+        avaliacaoCampo: null, avaliacaoAdversario: null,
+      };
+      const btn2 = e.target.querySelector('button[type="submit"]');
+      btn2.disabled = true;
+      try{
+        const ref2 = await createDoc("jogos", { ...base, quadro: "2" });
+        await createDoc("jogos", { ...base, quadro: "1", horario: e.target.elements["horario1"].value || "" });
+        toast("2º e 1º quadro criados.", "ok");
+        closeModal();
+        if (onSaved) onSaved(ref2.id);
+      }catch(err){
+        console.error(err);
+        toast("Erro ao salvar: " + err.message, "err");
+        btn2.disabled = false;
+      }
+      return;
+    }
     if (data.decisao){
       if (data.placarNos === null || data.placarAdversario === null || data.placarNos !== data.placarAdversario){
         toast("O desempate só vale quando o placar do tempo normal está empatado.", "err");
@@ -159,10 +200,11 @@ function openJogoForm(state, item, onSaved, prefill){
 // ============================================================================
 
 export function renderJogosList(root, state){
+  wireQuadroChips(root, () => renderJogosList(root, state));
   const nomeAdv = id => state.adversarios.find(a => a.id === id)?.nome || "";
   const nomeCampo = id => state.campos.find(c => c.id === id)?.nome || "";
 
-  const todos = [...state.jogos].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const todos = [...filtrarPorQuadro(state.jogos)].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   const termo = searchJogos.toLowerCase();
   const passa = (j) =>
     (!filtroTipoJogos || j.tipoPartida === filtroTipoJogos) &&
@@ -269,6 +311,7 @@ export function renderJogosList(root, state){
     <div class="rank-chips">
       ${[["todos", "Todos"], ["agendados", "Agendados"], ["realizados", "Realizados"]].map(([k, l]) => `<button class="rank-chip ${filtroStatusJogos === k ? "active" : ""}" data-status="${k}" type="button">${l}</button>`).join("")}
     </div>
+    ${ehFutsal() ? quadroChipsHtml(state.jogos) : ""}
     ${ehFutsal() ? `<div class="rank-chips">
       <button class="rank-chip ${visaoJogos === "jogo" ? "active" : ""}" data-visao="jogo" type="button">Por jogo</button>
       <button class="rank-chip ${visaoJogos === "confronto" ? "active" : ""}" data-visao="confronto" type="button">Por confronto</button>
