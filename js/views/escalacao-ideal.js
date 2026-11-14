@@ -3,7 +3,7 @@ import { $, $$, escapeHtml, fmt1, toast, reRenderKeepingFocus, formatDate } from
 import { listenPresencas } from "../db.js";
 import { openImagemModal } from "./flyer.js";
 import { mediaNotaAtleta, notasPorPosicao, jogosRealizados, ehJogador } from "../stats.js";
-import { filtrarPorPeriodo, anosDisponiveis, MESES } from "../filters.js";
+import { filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 import { SIGLAS, idModalidade, jogadoresEmCampo, posicoesProximas, posicaoNaModalidade } from "../modalidade.js";
 
 // Cada formação lista as linhas do campo (do ataque para o goleiro) e, para
@@ -324,7 +324,8 @@ function abrirImagemEscalacao({ formacao, titulo, periodo, linhas, suplentes }){
 
 
 export function renderEscalacaoIdeal(root, state){
-  const realizados = jogosRealizados(state.jogos);
+  wireQuadroChips(root, () => renderEscalacaoIdeal(root, state));
+  const realizados = jogosRealizados(filtrarPorQuadro(state.jogos));
   const anos = anosDisponiveis(realizados);
   const jogosFiltrados = filtrarPorPeriodo(realizados, { ano: filtroAno, mes: filtroMes });
 
@@ -536,6 +537,7 @@ export function renderEscalacaoIdeal(root, state){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>` : ""}
     </div>
+    ${quadroChipsHtml(state.jogos)}
     ${manchete}
     <details class="como-funciona" style="margin:0 0 18px; font-size:13px; color:var(--ink-soft); max-width:680px;">
       <summary style="cursor:pointer; font-weight:600;">Como a escalação é montada</summary>
