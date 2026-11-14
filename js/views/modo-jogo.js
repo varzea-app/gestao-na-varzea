@@ -6,7 +6,7 @@ import { TEAM } from "../tenant.js";
 import { $, $$, escapeHtml, toast, formatDateLong, confirmAction, todayISO } from "../utils.js";
 import { updateJogoField } from "../db.js";
 import { ordemPosicao, siglaPosicao } from "../modalidade.js";
-import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, normalizeEscalacao } from "../stats.js";
+import { ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, normalizeEscalacao, ordemCronologica } from "../stats.js";
 
 // ----------------------------------------------------------------------------
 // Estado da tela (fica na memória enquanto a página está aberta)
@@ -252,9 +252,11 @@ export function modoJogoLiberado(jogo){
 // Nenhum = null (a tela avisa que não há jogo agendado).
 export function jogoParaModoJogo(jogos){
   const hoje = todayISO();
-  const ok = jogos.filter(j => j.data && modoJogoLiberado(j));
-  return ok.find(j => j.data === hoje)
-    || ok.filter(j => j.data > hoje).sort((a, b) => a.data.localeCompare(b.data))[0]
+  const ok = jogos.filter(j => j.data && modoJogoLiberado(j)).sort(ordemCronologica);
+  // Hoje: primeiro o que ainda está agendado, na ordem do horário (no futsal, o 2º quadro antes do 1º).
+  return ok.find(j => j.data === hoje && j.status !== "realizado")
+    || ok.find(j => j.data === hoje)
+    || ok.find(j => j.data > hoje)
     || null;
 }
 
