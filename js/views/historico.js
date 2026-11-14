@@ -37,9 +37,18 @@ export function renderHistorico(root, state, subId){
     ? doPeriodo.filter(j => nomeAdv(j.adversarioId).toLowerCase().includes(termo) || nomeCampo(j.campoId).toLowerCase().includes(termo))
     : doPeriodo;
 
-  const nota = j => mediaNotaJogadoresNoJogo(j).media;
+  // No "Geral" com quadros, cada confronto vira UMA linha (placar somado dos quadros).
+  const porConfronto = contarPorConfronto(realizados);
+  const unidades = porConfronto ? jogosPorConfronto(realizados) : realizados;
+  const nota = j => {
+    if (j.jogosOriginais){
+      const ns = j.jogosOriginais.map(o => mediaNotaJogadoresNoJogo(o).media).filter(n => n !== null);
+      return ns.length ? avg(ns) : null;
+    }
+    return mediaNotaJogadoresNoJogo(j).media;
+  };
   const saldo = j => (j.placarNos ?? 0) - (j.placarAdversario ?? 0);
-  let lista = [...realizados];
+  let lista = [...unidades];
   if (ordemHistorico === "antigos") lista.sort((a, b) => (a.data || "").localeCompare(b.data || ""));
   else if (ordemHistorico === "nota") lista.sort((a, b) => (nota(b) ?? -1) - (nota(a) ?? -1));
   else if (ordemHistorico === "saldo") lista.sort((a, b) => saldo(b) - saldo(a));
@@ -48,11 +57,10 @@ export function renderHistorico(root, state, subId){
   // ---- Manchete do período ----
   const cont = { vitoria: 0, empate: 0, derrota: 0 };
   let gp = 0, gc = 0;
-  const porConfronto = contarPorConfronto(realizados);
-  (porConfronto ? jogosPorConfronto(realizados) : realizados).forEach(j => { const r = resultadoJogo(j); if (r) cont[r]++; });
+  unidades.forEach(j => { const r = resultadoJogo(j); if (r) cont[r]++; });
   realizados.forEach(j => { gp += j.placarNos || 0; gc += j.placarAdversario || 0; });
-  const goleada = [...realizados].filter(j => saldo(j) > 0).sort((a, b) => saldo(b) - saldo(a) || (b.data || "").localeCompare(a.data || ""))[0];
-  const melhorNota = [...realizados].filter(j => nota(j) !== null).sort((a, b) => nota(b) - nota(a))[0];
+  const goleada = [...unidades].filter(j => saldo(j) > 0).sort((a, b) => saldo(b) - saldo(a) || (b.data || "").localeCompare(a.data || ""))[0];
+  const melhorNota = [...unidades].filter(j => nota(j) !== null).sort((a, b) => nota(b) - nota(a))[0];
   const periodoTxt = [filtro.mes ? MESES[Number(filtro.mes) - 1] : "", filtro.ano || ""].filter(Boolean).join(" de ") || "Toda a história";
   const manchete = realizados.length ? `
     <div class="manchete">
@@ -66,15 +74,16 @@ export function renderHistorico(root, state, subId){
     const r = resultadoJogo(j);
     const info = RES_INFO[r];
     const gols = {};
-    (j.golsAssistencias || []).forEach(e => { if (e.atletaGolId) gols[e.atletaGolId] = (gols[e.atletaGolId] || 0) + 1; });
+    (j.jogosOriginais || [j]).flatMap(o => o.golsAssistencias || []).forEach(e => { if (e.atletaGolId) gols[e.atletaGolId] = (gols[e.atletaGolId] || 0) + 1; });
     const golsTxt = Object.entries(gols).map(([id, n]) => `${nomeAtleta(id)}${n > 1 ? ` ${n}` : ""}`).join(", ");
     const n = nota(j);
     return `
       <div class="hist-card" data-id="${j.id}">
         <div class="hist-res ${info ? info.cls : ""}" title="${info ? info.nome : ""}">${info ? info.letra : "—"}</div>
         <div class="hist-info">
-          <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}${rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : ""}</div>
+          <div class="hist-adv">${escapeHtml(nomeAdv(j.adversarioId))}${j.jogosOriginais ? ` <span class="badge badge-pending">confronto · ${j.jogosOriginais.length} quadros</span>` : (rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : "")}</div>
           <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId))}${desempateJogo(j) ? ` · ${escapeHtml(desempateJogo(j).texto)}` : ""}</div>
+          ${j.jogosOriginais ? `<div class="hist-meta">${j.jogosOriginais.map(o => `<span class="hist-quadro" data-jogo="${o.id}" style="text-decoration:underline dotted;cursor:pointer">${rotuloQuadro(o) || "Jogo"} ${o.placarNos ?? "–"}x${o.placarAdversario ?? "–"}</span>`).join(" · ")}</div>` : ""}
           ${golsTxt ? `<div class="hist-gols">⚽ ${escapeHtml(golsTxt)}</div>` : ""}
         </div>
         <div class="hist-placar">
@@ -97,7 +106,7 @@ export function renderHistorico(root, state, subId){
     });
     corpo = grupos.map(g => {
       const c = { vitoria: 0, empate: 0, derrota: 0 };
-      const unidadesMes = porConfronto ? jogosPorConfronto(g.jogos) : g.jogos;
+      const unidadesMes = g.jogos;
       unidadesMes.forEach(j => { const r = resultadoJogo(j); if (r) c[r]++; });
       const [a, m] = g.chave.split("-").map(Number);
       return `
@@ -158,6 +167,13 @@ export function renderHistorico(root, state, subId){
   });
   $("#ordem-hist", root)?.addEventListener("change", (e) => { ordemHistorico = e.target.value; renderHistorico(root, state); });
 
+  $$(".hist-quadro[data-jogo]", root).forEach(el => {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const jogo = state.jogos.find(j => j.id === el.dataset.jogo);
+      if (jogo) openSumulaModal(jogo, state);
+    });
+  });
   $$(".hist-card[data-id]", root).forEach(el => {
     el.addEventListener("click", () => {
       const jogo = state.jogos.find(j => j.id === el.dataset.id);
