@@ -3,8 +3,8 @@ import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatDate, formatDateLong, todayISO, fmt1, ratingWidgetHtml, wireRatingWidgets, reRenderKeepingFocus } from "../utils.js";
 import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas, setPresenca } from "../db.js";
 import { fieldHtml, collectFormData } from "./cadastros.js";
-import { posicoesDaModalidade } from "../modalidade.js";
-import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida } from "../stats.js";
+import { posicoesDaModalidade, idModalidade } from "../modalidade.js";
+import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, agruparConfrontos, rotuloQuadro, idsDaPartida } from "../stats.js";
 
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
@@ -21,6 +21,9 @@ let lastJogoId = null;
 let searchJogos = "";
 let filtroStatusJogos = "todos"; // todos | agendados | realizados
 let filtroTipoJogos = "";
+let visaoJogos = "jogo"; // futsal: "jogo" (cada quadro) | "confronto" (quadros do mesmo dia/adversário agrupados)
+const ehFutsal = () => idModalidade() === "futsal";
+const comQuadro = (txt, j) => rotuloQuadro(j) ? `${txt} · ${rotuloQuadro(j)}` : txt;
 // Índice do evento de gol/assistência em edição (null = formulário de novo evento).
 let editandoEvt = null;
 
@@ -45,6 +48,7 @@ function jogoFields(state){
     { key: "campoId", label: "Campo", type: "select", required: true, placeholder: "Selecione",
       options: state.campos.map(c => ({ value: c.id, label: c.nome })) },
     { key: "tipoPartida", label: "Tipo de partida", type: "select", options: TIPOS_PARTIDA, placeholder: "Selecione" },
+    ...(ehFutsal() ? [{ key: "quadro", label: "Quadro", type: "select", options: [{ value: "", label: "Sem quadro" }, { value: "1", label: "1º quadro" }, { value: "2", label: "2º quadro" }] }] : []),
     { key: "placarNos", label: "Placar — Nós", type: "number", min: 0 },
     { key: "placarAdversario", label: "Placar — Adversário", type: "number", min: 0 },
     { key: "decisao", label: "Decisão (se empatou)", type: "select", options: [{ value: "", label: "Tempo normal" }, { value: "penaltis", label: "Pênaltis" }, { value: "criterio", label: "Critério (festival / W.O.)" }] },
@@ -121,7 +125,7 @@ function openJogoForm(state, item, onSaved, prefill){
       }else{
         const ref = await createDoc("jogos", {
           ...data,
-          escalacaoInicial: [], escalacaoFinal: [], golsAssistencias: [], avaliacoesJogadores: {},
+          escalacaoInicial: [], escalacaoFinal: [], relacionados: [], golsAssistencias: [], avaliacoesJogadores: {},
           avaliacaoCampo: null, avaliacaoAdversario: null,
         });
         toast("Jogo criado.", "ok");
@@ -186,7 +190,7 @@ export function renderJogosList(root, state){
     <div class="manchete">
       <div class="manchete-eyebrow">Calendário</div>
       <div class="manchete-titulo">${agendadosTodos.length ? plural(agendadosTodos.length, "jogo agendado", "jogos agendados") : "Nenhum jogo agendado"}</div>
-      <div class="manchete-sub">${proximo ? `Próximo: vs ${escapeHtml(nomeAdv(proximo.adversarioId))}, ${formatDate(proximo.data)} (${txtDias(dias(proximo.data))})${nomeCampo(proximo.campoId) ? ` · ${escapeHtml(nomeCampo(proximo.campoId))}` : ""}` : "Cadastre o próximo jogo para abrir a confirmação de presença."} · ${plural(realizadosTodos.length, "partida realizada", "partidas realizadas")} na história</div>
+      <div class="manchete-sub">${proximo ? `Próximo: vs ${escapeHtml(nomeAdv(proximo.adversarioId))}, ${formatDate(proximo.data)} (${txtDias(dias(proximo.data))})${nomeCampo(proximo.campoId) ? ` · ${escapeHtml(nomeCampo(proximo.campoId))}` : ""}` : "Cadastre o próximo jogo para abrir a confirmação de presença."} · ${plural(realizadosTodos.length, "partida realizada", "partidas realizadas")}${ehFutsal() && realizadosTodos.some(j => j.quadro) ? ` em ${plural(agruparConfrontos(realizadosTodos).length, "confronto", "confrontos")}` : ""} na história</div>
     </div>`;
 
   const tipos = [...new Set(todos.map(j => j.tipoPartida).filter(Boolean))];
@@ -198,7 +202,7 @@ export function renderJogosList(root, state){
       <div class="hist-card" data-id="${j.id}">
         <div class="jogo-data"><div class="jogo-dia">${d}</div><div class="jogo-mes">${MESES[Number(m) - 1]?.slice(0, 3).toUpperCase() || ""}</div></div>
         <div class="hist-info">
-          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId) || "—")}</div>
+          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId) || "—")}${rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : ""}</div>
           <div class="hist-meta">${j.horario ? `${escapeHtml(j.horario)} · ` : ""}${escapeHtml(nomeCampo(j.campoId) || "—")}${j.tipoPartida ? ` · ${escapeHtml(j.tipoPartida)}` : ""}</div>
         </div>
         <div class="hist-placar"><span class="badge badge-pending">${txtDias(n) || "Agendado"}</span></div>
@@ -212,16 +216,36 @@ export function renderJogosList(root, state){
       <div class="hist-card" data-id="${j.id}">
         <div class="hist-res ${info ? info[1] : ""}">${info ? info[0] : "—"}</div>
         <div class="hist-info">
-          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId) || "—")}</div>
+          <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId) || "—")}${rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : ""}</div>
           <div class="hist-meta">${formatDate(j.data)} · ${escapeHtml(nomeCampo(j.campoId) || "—")}${j.tipoPartida ? ` · ${escapeHtml(j.tipoPartida)}` : ""}${dsp ? ` · ${escapeHtml(dsp.texto)}` : ""}</div>
         </div>
         <div class="hist-placar"><div class="hist-placar-val">${j.placarNos ?? "–"} x ${j.placarAdversario ?? "–"}</div></div>
       </div>`;
   };
 
+  // Futsal, visão "por confronto": os quadros do mesmo dia contra o mesmo
+  // adversário viram um cartão só, com o placar somado.
+  const porConfronto = ehFutsal() && visaoJogos === "confronto";
+  const cartaoConfronto = (c) => {
+    if (c.jogos.length === 1) return cartaoRealizado(c.jogos[0]);
+    const info = { vitoria: ["V", "res-v"], empate: ["E", "res-e"], derrota: ["D", "res-d"] }[c.resultado];
+    const det = c.jogos.map(x => `${rotuloQuadro(x) || "Jogo"} ${x.placarNos ?? "–"}x${x.placarAdversario ?? "–"}`).join(" · ");
+    return `
+      <div class="hist-card" data-id="${c.id}">
+        <div class="hist-res ${info ? info[1] : ""}">${info ? info[0] : "—"}</div>
+        <div class="hist-info">
+          <div class="hist-adv">vs ${escapeHtml(nomeAdv(c.adversarioId) || "—")} <span class="badge badge-pending">confronto${c.parcial ? " · parcial" : ""}</span></div>
+          <div class="hist-meta">${formatDate(c.data)} · ${escapeHtml(nomeCampo(c.campoId) || "—")} · ${escapeHtml(det)}</div>
+        </div>
+        <div class="hist-placar"><div class="hist-placar-val">${c.placarNos ?? "–"} x ${c.placarAdversario ?? "–"}</div></div>
+      </div>`;
+  };
+  const itensReal = porConfronto ? agruparConfrontos(realizados).sort((a, b) => (b.data || "").localeCompare(a.data || "")) : realizados;
+  const cartaoItem = porConfronto ? cartaoConfronto : cartaoRealizado;
+
   // Realizados agrupados por mês, como no Histórico.
   const gruposReal = [];
-  realizados.forEach(j => {
+  itensReal.forEach(j => {
     const chave = (j.data || "").slice(0, 7);
     let g = gruposReal[gruposReal.length - 1];
     if (!g || g.chave !== chave){ g = { chave, jogos: [] }; gruposReal.push(g); }
@@ -245,6 +269,10 @@ export function renderJogosList(root, state){
     <div class="rank-chips">
       ${[["todos", "Todos"], ["agendados", "Agendados"], ["realizados", "Realizados"]].map(([k, l]) => `<button class="rank-chip ${filtroStatusJogos === k ? "active" : ""}" data-status="${k}" type="button">${l}</button>`).join("")}
     </div>
+    ${ehFutsal() ? `<div class="rank-chips">
+      <button class="rank-chip ${visaoJogos === "jogo" ? "active" : ""}" data-visao="jogo" type="button">Por jogo</button>
+      <button class="rank-chip ${visaoJogos === "confronto" ? "active" : ""}" data-visao="confronto" type="button">Por confronto</button>
+    </div>` : ""}
     <div class="rank-filtros" style="max-width:640px;">
       <div class="field">
         <label>Tipo de partida</label>
@@ -263,7 +291,7 @@ export function renderJogosList(root, state){
     ${agendados.length ? `<div class="hist-mes" style="margin-top:6px;">Agendados <span>${plural(agendados.length, "jogo", "jogos")}</span></div>${agendados.map(cartaoAgendado).join("")}` : ""}
     ${gruposReal.map(g => {
       const [ya, ma] = g.chave.split("-").map(Number);
-      return `<div class="hist-mes">${MESES[ma - 1]} de ${ya} <span>${plural(g.jogos.length, "jogo", "jogos")}</span></div>${g.jogos.map(cartaoRealizado).join("")}`;
+      return `<div class="hist-mes">${MESES[ma - 1]} de ${ya} <span>${plural(g.jogos.length, "jogo", "jogos")}</span></div>${g.jogos.map(cartaoItem).join("")}`;
     }).join("")}
   `;
 
@@ -272,6 +300,7 @@ export function renderJogosList(root, state){
     reRenderKeepingFocus(root, () => renderJogosList(root, state));
   });
   $("#filtro-tipo-jogo", root)?.addEventListener("change", (e) => { filtroTipoJogos = e.target.value; renderJogosList(root, state); });
+  $$(".rank-chip[data-visao]", root).forEach(b => b.addEventListener("click", () => { visaoJogos = b.dataset.visao; renderJogosList(root, state); }));
   $$(".rank-chip[data-status]", root).forEach(b => b.addEventListener("click", () => { filtroStatusJogos = b.dataset.status; renderJogosList(root, state); }));
 
   $("#btn-new-jogo").addEventListener("click", () => openJogoForm(state, null, (newId) => { location.hash = `#jogos/${newId}`; }));
@@ -287,7 +316,7 @@ export function renderJogosList(root, state){
 export function renderJogoDetail(root, state, jogoId){
   if (jogoId !== lastJogoId){ activeTab = temRecurso("escalacao") ? "escalacao-inicial" : "gols"; lastJogoId = jogoId; editandoEvt = null; }
   // Aba que o plano atual não inclui (ex.: o time passou de Craque para Start): cai em "gols".
-  if ((activeTab.startsWith("escalacao") && !temRecurso("escalacao")) || (activeTab === "avaliacoes" && !temRecurso("avaliacao-campo"))) activeTab = "gols";
+  if ((activeTab === "relacionados" && (!ehFutsal() || !temRecurso("escalacao"))) || (activeTab.startsWith("escalacao") && !temRecurso("escalacao")) || (activeTab === "avaliacoes" && !temRecurso("avaliacao-campo"))) activeTab = "gols";
 
   if (presJogoId !== jogoId){
     if (presUnsub) presUnsub();
@@ -331,24 +360,37 @@ export function renderJogoDetail(root, state, jogoId){
     if (lista.length) faixaJogo = `<div class="jogo-faixa">⚽ <strong>Gols:</strong> ${escapeHtml(lista.join(", "))}</div>`;
   }
 
+  // Futsal: resumo do confronto do dia (os outros quadros contra o mesmo adversário).
+  let faixaConfronto = "";
+  if (jogo.quadro){
+    const conf = agruparConfrontos(state.jogos.filter(x => x.data === jogo.data && x.adversarioId === jogo.adversarioId && x.quadro)).find(c => c.jogos.some(x => x.id === jogo.id));
+    if (conf && conf.jogos.length > 1){
+      const itens = conf.jogos.map(x => x.id === jogo.id
+        ? `<strong>${rotuloQuadro(x)} ${x.placarNos ?? "–"}x${x.placarAdversario ?? "–"}</strong>`
+        : `<a href="#jogos/${x.id}">${rotuloQuadro(x)} ${x.status === "realizado" ? `${x.placarNos ?? "–"}x${x.placarAdversario ?? "–"}` : "(agendado)"}</a>`).join(" · ");
+      faixaConfronto = `<div class="jogo-faixa">🆚 <strong>Confronto do dia:</strong> ${itens}${conf.placarNos !== null ? ` · total ${conf.placarNos} x ${conf.placarAdversario}${conf.parcial ? " (parcial)" : ""}` : ""}</div>`;
+    }
+  }
+
   root.innerHTML = `
     <div class="topbar">
       <div>
         <a href="#jogos" style="font-size:12px; color:var(--pitch); font-weight:600; text-decoration:none;">&larr; Partidas</a>
-        <h1 style="margin-top:4px;">${TEAM.nomeHtml} vs ${escapeHtml(adv?.nome || "?")}</h1>
+        <h1 style="margin-top:4px;">${TEAM.nomeHtml}${rotuloQuadro(jogo) ? ` (${rotuloQuadro(jogo)})` : ""} vs ${escapeHtml(adv?.nome || "?")}</h1>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
         ${modoJogoLiberado(jogo) ? `<button class="btn btn-gold" id="btn-modojogo">⚽ Modo jogo</button>` : ""}
         <button class="btn btn-ghost" id="btn-flyer"${off("flyer")}>Gerar imagem</button>
         <button class="btn btn-ghost" id="btn-presenca-link"${off("presenca")}>Copiar link de presença</button>
         <button class="btn btn-ghost" id="btn-presenca"${off("presenca")}>Ver presença</button>
+        ${ehFutsal() && jogo.quadro ? `<button class="btn btn-ghost" id="btn-outro-quadro">+ ${jogo.quadro === "1" ? "2º" : "1º"} quadro</button>` : ""}
         <button class="btn btn-ghost" id="btn-dup-jogo">Duplicar</button>
         <button class="btn btn-ghost" id="btn-edit-jogo">Editar dados</button>
       </div>
     </div>
 
     <div class="sumula">
-      <div class="sumula-side"><div class="team">${TEAM.nomeHtml}</div><div class="score">${jogo.placarNos ?? "–"}</div></div>
+      <div class="sumula-side"><div class="team">${TEAM.nomeHtml}${rotuloQuadro(jogo) ? `<div style="font-size:12px; font-weight:600; opacity:.8;">${rotuloQuadro(jogo)}</div>` : ""}</div><div class="score">${jogo.placarNos ?? "–"}</div></div>
       <div class="sumula-mid"><div class="vs">VS</div><div class="date">${formatDateLong(jogo.data)}${jogo.horario ? ` · ${escapeHtml(jogo.horario)}` : ""}</div></div>
       <div class="sumula-side"><div class="team">${escapeHtml(adv?.nome || "?")}</div><div class="score">${jogo.placarAdversario ?? "–"}</div></div>
       <div class="sumula-meta">
@@ -360,10 +402,12 @@ export function renderJogoDetail(root, state, jogoId){
     </div>
 
     ${faixaJogo}
+    ${faixaConfronto}
 
     <div class="tabbar">
       <button class="tab-btn" data-tab="escalacao-inicial"${off("escalacao")}>Escalação inicial</button>
       <button class="tab-btn" data-tab="escalacao-final"${off("escalacao")}>Escalação final</button>
+      ${ehFutsal() ? `<button class="tab-btn" data-tab="relacionados"${off("escalacao")}>Relacionados</button>` : ""}
       <button class="tab-btn" data-tab="gols">Gols &amp; assistências</button>
       <button class="tab-btn" data-tab="avaliacoes"${off("avaliacao-campo")}>Campo &amp; adversário</button>
     </div>
@@ -374,6 +418,7 @@ export function renderJogoDetail(root, state, jogoId){
     <div class="tab-panel" data-panel="escalacao-final">
       ${renderEscalacaoPanel(jogo, state.atletas, "escalacaoFinal", presencasJogo)}
     </div>
+    ${ehFutsal() ? `<div class="tab-panel" data-panel="relacionados">${renderRelacionadosPanel(jogo, state.atletas, presencasJogo)}</div>` : ""}
     <div class="tab-panel" data-panel="gols">
       ${renderGolsPanel(jogo, state.atletas)}
     </div>
@@ -399,6 +444,11 @@ export function renderJogoDetail(root, state, jogoId){
     try{ await navigator.clipboard.writeText(linkPresenca(jogo.id)); toast("Link de presença copiado.", "ok"); }
     catch(e){ toast("Não foi possível copiar.", "err"); }
   });
+  // Futsal: cria o outro quadro do mesmo dia (mesmo adversário, campo e horário).
+  $("#btn-outro-quadro")?.addEventListener("click", () => openJogoForm(state, null, (newId) => { location.hash = `#jogos/${newId}`; }, {
+    data: jogo.data, horario: jogo.horario || "", status: "agendado", adversarioId: jogo.adversarioId, campoId: jogo.campoId,
+    tipoPartida: jogo.tipoPartida || "", quadro: jogo.quadro === "1" ? "2" : "1", observacoes: "",
+  }));
   // Duplicar: reaproveita adversário, campo, tipo e observações; o resto
   // (placar, escalação, gols, notas) começa vazio, como um jogo novo agendado.
   $("#btn-dup-jogo").addEventListener("click", () => openJogoForm(state, null, (newId) => { location.hash = `#jogos/${newId}`; }, {
@@ -408,6 +458,7 @@ export function renderJogoDetail(root, state, jogoId){
 
   wireEscalacaoPanel(root, jogo, "escalacaoInicial", "[data-panel='escalacao-inicial']", presencasJogo);
   wireEscalacaoPanel(root, jogo, "escalacaoFinal", "[data-panel='escalacao-final']", presencasJogo);
+  if (ehFutsal()) wireRelacionadosPanel(root, jogo, presencasJogo);
   wireGolsPanel(root, jogo, state.atletas, () => renderJogoDetail(root, state, jogoId));
   wireAvaliacoesPanel(root, jogo);
 }
@@ -587,6 +638,81 @@ function wireEscalacaoPanel(root, jogo, field, panelSel, presencas){
     }catch(err){
       toast("Erro ao salvar: " + err.message, "err");
     }
+    btn.disabled = false;
+  });
+}
+
+// ----------------------------------------------------------------------------
+// Relacionados (futsal): todos os jogadores daquele jogo/quadro. Contam como 1
+// jogo disputado (mesmo sem avaliação) e aparecem na avaliação e nos gols.
+// ----------------------------------------------------------------------------
+
+function renderRelacionadosPanel(jogo, atletas, presencas){
+  const sel = new Set(jogo.relacionados || []);
+  const noJogo = idsDaPartida(jogo);
+  const disponiveis = atletas.filter(a => ehJogador(a) && (a.ativo !== false || sel.has(a.id) || noJogo.has(a.id)));
+  if (disponiveis.length === 0) return `<div class="empty-state"><p>Cadastre atletas ativos para relacionar.</p></div>`;
+  const resp = new Map((presencas || []).map(p => [p.atletaId, p.resposta]));
+  const vou = disponiveis.filter(a => resp.get(a.id) === "vou").length;
+  const extraEscal = [...noJogo].filter(id => !sel.has(id)).length;
+  return `
+    <div class="card card-pad">
+      <div class="card-title">Relacionados${rotuloQuadro(jogo) ? ` · ${rotuloQuadro(jogo)}` : ""}</div>
+      <div class="card-sub">Todos os jogadores que atuaram neste jogo. Cada relacionado conta como 1 jogo disputado, mesmo sem nota. Quem está nas escalações inicial/final também conta automaticamente.</div>
+      <div style="margin:0 0 12px; display:flex; gap:8px; flex-wrap:wrap;">
+        ${vou ? `<button type="button" class="btn btn-ghost btn-sm" data-rel-preencher="confirmados">Marcar os confirmados (${vou})</button>` : ""}
+        ${extraEscal ? `<button type="button" class="btn btn-ghost btn-sm" data-rel-preencher="escalacoes">Incluir quem está nas escalações (${extraEscal})</button>` : ""}
+      </div>
+      <div class="player-grid player-grid-escalacao">
+        ${disponiveis.map(a => `
+          <label class="player-chip ${sel.has(a.id) ? "selected" : ""}" data-chip="${a.id}">
+            <input type="checkbox" value="${a.id}" ${sel.has(a.id) ? "checked" : ""}>
+            <span class="player-num">${a.numero ?? "–"}</span>
+            <span style="flex:1;">${escapeHtml(a.nome)}${resp.get(a.id) === "vou" ? ` <small style="color:var(--ink-faint);">confirmou</small>` : ""}</span>
+          </label>`).join("")}
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" data-save-relacionados>Salvar relacionados</button></div>
+    </div>`;
+}
+
+function wireRelacionadosPanel(root, jogo, presencas){
+  const panel = $("[data-panel='relacionados']", root);
+  if (!panel) return;
+  const marcar = (id, ligado) => {
+    const chip = panel.querySelector(`.player-chip[data-chip="${id}"]`);
+    if (!chip) return;
+    chip.querySelector('input[type="checkbox"]').checked = ligado;
+    chip.classList.toggle("selected", ligado);
+  };
+  $$(".player-chip", panel).forEach(chip => {
+    const cb = chip.querySelector('input[type="checkbox"]');
+    chip.addEventListener("click", (e) => {
+      if (e.target === cb) return; // clique direto no checkbox alterna nativamente
+      e.preventDefault();
+      cb.checked = !cb.checked;
+      chip.classList.toggle("selected", cb.checked);
+    });
+    cb.addEventListener("change", () => chip.classList.toggle("selected", cb.checked));
+  });
+  $$("[data-rel-preencher]", panel).forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.relPreencher === "confirmados") (presencas || []).filter(p => p.resposta === "vou").forEach(p => marcar(p.atletaId, true));
+    else idsDaPartida(jogo).forEach(id => marcar(id, true));
+    toast("Marcados. Clique em Salvar relacionados.", "ok");
+  }));
+  const btn = $("[data-save-relacionados]", panel);
+  btn?.addEventListener("click", async () => {
+    const ids = $$('.player-chip input[type="checkbox"]', panel).filter(cb => cb.checked).map(cb => cb.value);
+    btn.disabled = true;
+    try{
+      await updateJogoField(jogo.id, { relacionados: ids });
+      // Em jogo agendado, relacionado conta como presença confirmada (igual à escalação).
+      if (jogo.status === "agendado"){
+        const respAtual = new Map((presencas || []).map(p => [p.atletaId, p.resposta]));
+        try{ await Promise.all(ids.filter(id => respAtual.get(id) !== "vou").map(id => setPresenca(jogo.id, id, "vou"))); }
+        catch(err){ console.error(err); }
+      }
+      toast("Relacionados salvos.", "ok");
+    }catch(err){ toast("Erro ao salvar: " + err.message, "err"); }
     btn.disabled = false;
   });
 }
