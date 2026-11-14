@@ -1,7 +1,7 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { $, escapeHtml, formatDate, fmt1, avg } from "../utils.js";
 import {
-  ehJogador, jogosRealizados, normalizeEscalacao, posicaoJogadaNoJogo, statsPorAtleta,
+  ehJogador, jogosRealizados, normalizeEscalacao, idsDaPartida, posicaoJogadaNoJogo, statsPorAtleta,
   notasDoAtletaNoJogo, resultadoJogo, desempateJogo, GOL_CONTRA_ID,
 } from "../stats.js";
 
@@ -111,7 +111,7 @@ function extratoHtml(atleta, state, ano){
   // Jogos em que o atleta esteve escalado ou teve algum gol/assistência —
   // os totais batem com os do Ranking (que conta gols mesmo sem escalação).
   const participou = (j) => {
-    const escalado = [...normalizeEscalacao(j.escalacaoInicial), ...normalizeEscalacao(j.escalacaoFinal)].some(e => e.atletaId === atleta.id);
+    const escalado = idsDaPartida(j).has(atleta.id);
     const evento = (j.golsAssistencias || []).some(e => e.atletaGolId === atleta.id || e.atletaAssistId === atleta.id);
     return escalado || evento;
   };
