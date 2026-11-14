@@ -2,7 +2,7 @@ import { TEAM, hashtags } from "../tenant.js";
 import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, fmt1, toast, avg } from "../utils.js";
 import { ehJogador, jogosRealizados, statsPorAtleta, notasDoAtletaNoJogo, resultadoJogo } from "../stats.js";
-import { anosDisponiveis, MESES } from "../filters.js";
+import { anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 import { openImagemModal, iniciais } from "./flyer.js";
 
 // Premiações da temporada (artilheiro, garçom, G+A, melhor nota, mais assíduo)
@@ -146,8 +146,9 @@ function abrirImagemDestaque(ranking, mesRef){
 }
 
 export function renderPremiacoes(root, state){
+  wireQuadroChips(root, () => renderPremiacoes(root, state));
   const jogadores = state.atletas.filter(ehJogador);
-  const realizados = jogosRealizados(state.jogos);
+  const realizados = jogosRealizados(filtrarPorQuadro(state.jogos));
   const anos = anosDisponiveis(realizados);
   const meses = [...new Set(realizados.map(j => (j.data || "").slice(0, 7)).filter(m => m.length === 7))].sort().reverse();
   if (anoSel === null) anoSel = anos[0] || "all";
@@ -272,6 +273,7 @@ export function renderPremiacoes(root, state){
         <h1>Premiações</h1>
       </div>
     </div>
+    ${quadroChipsHtml(state.jogos)}
     <div class="rank-chips">
       <button class="rank-chip ${aba === "temporada" ? "active" : ""}" data-aba="temporada" type="button">Premiação da temporada</button>
       <button class="rank-chip ${aba === "mes" ? "active" : ""}" data-aba="mes" type="button">Destaque do mês</button>
