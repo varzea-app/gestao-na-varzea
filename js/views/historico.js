@@ -65,7 +65,7 @@ export function renderHistorico(root, state, subId){
   const manchete = realizados.length ? `
     <div class="manchete">
       <div class="manchete-eyebrow">${escapeHtml(periodoTxt)}</div>
-      <div class="manchete-titulo">${plural(realizados.length, "partida", "partidas")}${realizados.some(j => j.quadro) ? ` em ${plural(agruparConfrontos(realizados).length, "confronto", "confrontos")}` : ""}: ${plural(cont.vitoria, "vitória", "vitórias")}, ${plural(cont.empate, "empate", "empates")} e ${plural(cont.derrota, "derrota", "derrotas")}</div>
+      <div class="manchete-titulo">${porConfronto ? `${plural(unidades.length, "confronto", "confrontos")} (${plural(realizados.length, "partida", "partidas")})` : plural(realizados.length, "partida", "partidas")}: ${plural(cont.vitoria, "vitória", "vitórias")}, ${plural(cont.empate, "empate", "empates")} e ${plural(cont.derrota, "derrota", "derrotas")}</div>
       <div class="manchete-sub">${plural(gp, "gol marcado", "gols marcados")} e ${gc} sofrido${gc === 1 ? "" : "s"}${goleada ? ` · maior vitória: ${goleada.placarNos} x ${goleada.placarAdversario} contra ${escapeHtml(nomeAdv(goleada.adversarioId))}` : ""}${melhorNota ? ` · melhor atuação coletiva: nota ${fmt1(nota(melhorNota))} contra ${escapeHtml(nomeAdv(melhorNota.adversarioId))}` : ""}</div>
     </div>` : "";
 
