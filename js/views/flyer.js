@@ -406,7 +406,9 @@ export function openFlyerModal(state, jogo){
     : `<option value="">Nenhum jogador com nota ou escalação</option>`;
   const montar = () => flyerHtml({ modelo, formato, tema, jogo, adv, campo, escudo, resumo, jogadorId, foto });
 
+  const comp = prepararCompartilhamento({ gerarBlob: () => gerarBlob(), nomeArquivo: () => nomeArquivo(), ativo: () => !!document.getElementById("fl-prev") });
   const desenhar = () => {
+    comp.invalidar();
     $("#fl-melhor-box").style.display = modelo === "melhor" ? "" : "none";
     $("#fl-escudo-label").textContent = escudo ? "Trocar escudo do adversário" : "Adicionar escudo do adversário";
     const prev = $("#fl-prev");
@@ -483,21 +485,8 @@ export function openFlyerModal(state, jogo){
 
   $("#fl-compartilhar").addEventListener("click", async (e) => {
     const btn = e.currentTarget; btn.disabled = true;
-    try{
-      const blob = await gerarBlob();
-      const file = new File([blob], nomeArquivo(), { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })){
-        try{ await navigator.share({ files: [file], title: TEAM.nome }); }
-        catch(err){ if (err?.name !== "AbortError") throw err; }
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = nomeArquivo();
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
-        toast("Seu navegador não abre o compartilhar; a imagem foi baixada.", "ok");
-      }
-    }catch(err){ console.error(err); toast("Erro ao compartilhar: " + err.message, "err"); }
+    try{ await comp.compartilhar(); }
+    catch(err){ console.error(err); toast("Erro ao compartilhar: " + err.message, "err"); }
     btn.disabled = false;
   });
 }
@@ -608,7 +597,9 @@ export function openImagemModal({ titulo, render, legenda, comFoto = false, sele
   };
   const textoLegenda = () => (typeof legenda === "function" ? legenda(selId, { frase: frase.trim() }) : legenda);
   const atualizarLegenda = () => { const t = $("#gm-legenda-txt"); if (t && !legendaEditada) t.value = textoLegenda(); };
+  const comp = prepararCompartilhamento({ gerarBlob: () => gerarBlob(), nomeArquivo: () => nomeArquivo(), ativo: () => !!document.getElementById("gm-prev") });
   const desenhar = () => {
+    comp.invalidar();
     const prev = $("#gm-prev");
     prev.innerHTML = montar();
     const wrap = $("#gm-prev-wrap");
@@ -667,17 +658,66 @@ export function openImagemModal({ titulo, render, legenda, comFoto = false, sele
   });
   $("#gm-compartilhar").addEventListener("click", async (e) => {
     const btn = e.currentTarget; btn.disabled = true;
-    try{
-      const blob = await gerarBlob();
-      const file = new File([blob], nomeArquivo(), { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })){
-        try{ await navigator.share({ files: [file], title: TEAM.nome }); }
-        catch(err){ if (err?.name !== "AbortError") throw err; }
-      } else {
-        baixar(blob);
-        toast("Seu navegador não abre o compartilhar; a imagem foi baixada.", "ok");
-      }
-    }catch(err){ console.error(err); toast("Erro ao compartilhar: " + err.message, "err"); }
+    try{ await comp.compartilhar(); }
+    catch(err){ console.error(err); toast("Erro ao compartilhar: " + err.message, "err"); }
     btn.disabled = false;
   });
+}
+
+// ----------------------------------------------------------------------------
+// Compartilhar imagem
+// O navegador só deixa abrir a folha de compartilhar logo depois do toque (uns 5 s).
+// Gerar a imagem no celular pode passar disso, e aí dá "Must be handling a user
+// gesture". Por isso a imagem é preparada em segundo plano a cada mudança no modal e,
+// ao tocar em Compartilhar, o share é chamado na hora (sem esperar nada antes).
+// Se a imagem ainda não estava pronta, ela é gerada, guardada, e pede-se um novo toque.
+// ----------------------------------------------------------------------------
+function prepararCompartilhamento({ gerarBlob, nomeArquivo, ativo }){
+  let versao = 0, pronto = null, promessa = null, timer = null;
+  const preparar = () => {
+    if (pronto) return Promise.resolve(pronto);
+    if (promessa) return promessa;
+    const v = versao;
+    const p = gerarBlob()
+      .then(b => { if (v === versao) pronto = b; return b; })
+      .catch(err => { console.warn("Preparo da imagem:", err); return null; })
+      .finally(() => { if (promessa === p) promessa = null; });
+    promessa = p;
+    return p;
+  };
+  const invalidar = () => {
+    versao++; pronto = null; promessa = null;
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (ativo()) preparar(); }, 700);
+  };
+  const baixar = (blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = nomeArquivo();
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+  const enviar = async (blob) => {
+    const file = new File([blob], nomeArquivo(), { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })){
+      try{ await navigator.share({ files: [file], title: TEAM.nome }); }
+      catch(err){
+        if (err?.name === "AbortError") return;
+        if (err?.name === "NotAllowedError"){ toast("Imagem pronta! Toque em Compartilhar de novo.", "ok"); return; }
+        throw err;
+      }
+    } else {
+      baixar(blob);
+      toast("Seu navegador não abre o compartilhar; a imagem foi baixada.", "ok");
+    }
+  };
+  const compartilhar = async () => {
+    if (pronto) return enviar(pronto);          // caminho rápido: ainda dentro do toque
+    toast("Preparando a imagem…", "ok");
+    let blob = await preparar();
+    if (!blob) blob = await gerarBlob();         // preparo em segundo plano falhou: tenta de novo
+    if (!pronto) pronto = blob;                  // guarda: o próximo toque compartilha na hora
+    return enviar(blob);
+  };
+  return { invalidar, compartilhar };
 }
