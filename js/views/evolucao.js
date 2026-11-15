@@ -1,5 +1,5 @@
 import { $, escapeHtml, fmt1 } from "../utils.js";
-import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, mediaNotaJogadoresNoJogo, golsEAssistenciasPorAtleta, resultadoJogo, notasDoAtletaNoJogo, posicaoJogadaNoJogo } from "../stats.js";
+import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, mediaNotaJogadoresNoJogo, golsEAssistenciasPorAtleta, resultadoJogo, notasDoAtletaNoJogo, normalizeEscalacao } from "../stats.js";
 import { posicoesDaModalidade, posicaoNaModalidade, ordemPosicao } from "../modalidade.js";
 import { MESES, anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 
@@ -360,22 +360,29 @@ function leituraFaixas(f){
 // ----------------------------------------------------------------------------
 // Melhores duplas por posição (pela posição JOGADA, não a de cadastro)
 // ----------------------------------------------------------------------------
+const MIN_JOGOS_POSICAO = 2;
 const TITULO_POSICAO = { Zagueiro: "Zaga", Lateral: "Laterais", Volante: "Volantes", Meia: "Meio-campo", Atacante: "Ataque", Fixo: "Fixo", Ala: "Alas", "Pivô": "Pivôs" };
 
-// posição -> atletaId -> { notas, jogos:Set }. Mesma regra do restante do app: posição da escalação
-// (final, depois inicial); sem ela, a de cadastro; partidas antigas são levadas ao vocabulário da modalidade.
+// posição -> atletaId -> { notas, jogos:Set }.
+// Posições da partida = a da escalação inicial E a da final (se o jogador mudou de posição no
+// meio do jogo, a nota da partida vale para as duas, já que não dá para separar onde foi melhor).
+// Sem posição em nenhuma escalação, usa a de cadastro; partidas antigas são levadas ao vocabulário da modalidade.
 function notasPorPosicaoJogada(jogadores, doAnoJogos){
   const porId = new Map(jogadores.map(a => [a.id, a]));
   const mapa = {};
   doAnoJogos.forEach(j => {
+    const ini = new Map(normalizeEscalacao(j.escalacaoInicial).map(e => [e.atletaId, e.posicao]));
+    const fin = new Map(normalizeEscalacao(j.escalacaoFinal).map(e => [e.atletaId, e.posicao]));
     Object.keys(j.avaliacoesJogadores || {}).forEach(id => {
       const a = porId.get(id); if (!a) return;
       const notas = notasDoAtletaNoJogo(j, id); if (!notas.length) return;
-      let pos = posicaoJogadaNoJogo(j, id) || a.posicao || null;
-      if (pos) pos = posicaoNaModalidade(pos);
-      if (!pos) return;
-      const x = ((mapa[pos] = mapa[pos] || {})[id] = mapa[pos][id] || { notas: [], jogos: new Set() });
-      x.notas.push(...notas); x.jogos.add(j.id);
+      let posicoes = [ini.get(id), fin.get(id)].filter(Boolean);
+      if (!posicoes.length && a.posicao) posicoes = [a.posicao];
+      posicoes = [...new Set(posicoes.map(p => posicaoNaModalidade(p)).filter(Boolean))];
+      posicoes.forEach(pos => {
+        const x = ((mapa[pos] = mapa[pos] || {})[id] = mapa[pos][id] || { notas: [], jogos: new Set() });
+        x.notas.push(...notas); x.jogos.add(j.id);
+      });
     });
   });
   return mapa;
@@ -387,16 +394,15 @@ function melhoresDuplas(jogadores, doAnoJogos){
   const posicoes = posicoesDaModalidade().filter(p => p !== "Goleiro").sort((a, b) => ordemPosicao(a) - ordemPosicao(b));
   const blocos = posicoes.map(pos => {
     const todos = Object.entries(mapa[pos] || {}).map(([id, x]) => ({ id, nome: nomes.get(id), media: soma(x.notas, n => n) / x.notas.length, jogos: x.jogos }));
-    // prefere quem tem 2+ jogos na posição; se isso não formar ao menos uma dupla, aceita 1
-    let minJogos = 2, el = todos.filter(t => t.jogos.size >= 2);
-    if (el.length < 2){ minJogos = 1; el = todos; }
+    // só entra quem atuou ao menos 2 jogos avaliados na posição (1 jogo com nota alta não vale)
+    const el = todos.filter(t => t.jogos.size >= MIN_JOGOS_POSICAO);
     const duplas = [];
     for (let i = 0; i < el.length; i++) for (let k = i + 1; k < el.length; k++){
       const a = el[i], b = el[k];
       duplas.push({ a, b, nota: (a.media + b.media) / 2, juntos: [...a.jogos].filter(x => b.jogos.has(x)).length });
     }
     duplas.sort((x, y) => y.nota - x.nota || y.juntos - x.juntos || (y.a.jogos.size + y.b.jogos.size) - (x.a.jogos.size + x.b.jogos.size));
-    return { pos, titulo: TITULO_POSICAO[pos] || pos, minJogos, candidatos: el.length, duplas: duplas.slice(0, 3) };
+    return { pos, titulo: TITULO_POSICAO[pos] || pos, candidatos: el.length, duplas: duplas.slice(0, 3) };
   });
   // quantas duplas cada jogador integra (em todo o quadro) e onde
   const contagem = {};
@@ -409,7 +415,7 @@ function melhoresDuplas(jogadores, doAnoJogos){
 }
 
 function htmlDuplas(d){
-  if (!d.blocos.some(b => b.duplas.length)) return `<p style="color:var(--ink-faint); font-size:13px; margin:8px 0 0;">Ainda não há notas suficientes por posição neste ano: cada dupla precisa de dois jogadores avaliados na mesma posição.</p>`;
+  if (!d.blocos.some(b => b.duplas.length)) return `<p style="color:var(--ink-faint); font-size:13px; margin:8px 0 0;">Ainda não há notas suficientes por posição neste ano: cada dupla precisa de dois jogadores com pelo menos 2 jogos avaliados na mesma posição.</p>`;
   const chip = (j) => {
     const n = d.contagem[j.id]?.total || 1;
     return `<span class="evo-chip${n > 1 ? " evo-chip-rep" : ""}" ${n > 1 ? `title="${escapeHtml(j.nome)} aparece em ${n} duplas"` : ""}>${escapeHtml(j.nome)}${n > 1 ? `<sup>×${n}</sup>` : ""}</span>`;
@@ -425,8 +431,7 @@ function htmlDuplas(d){
             <div class="evo-dupla-sub">${escapeHtml(x.a.nome)} ${fmt1(x.a.media)} (${x.a.jogos.size}j) · ${escapeHtml(x.b.nome)} ${fmt1(x.b.media)} (${x.b.jogos.size}j) · ${x.juntos ? `juntos em ${plural(x.juntos, "jogo", "jogos")}` : "ainda não jogaram juntos"}</div>
           </div>
           <div class="evo-dupla-nota">${fmt1(x.nota)}</div>
-        </div>`).join("") : `<p class="evo-vazio">Menos de 2 jogadores avaliados nessa posição.</p>`}
-      ${b.duplas.length && b.minJogos === 1 ? `<div class="evo-rodape">Poucos jogos na posição: base pequena.</div>` : ""}
+        </div>`).join("") : `<p class="evo-vazio">Ainda não há 2 jogadores com ${MIN_JOGOS_POSICAO}+ jogos avaliados nessa posição.</p>`}
     </div>`).join("");
   const rep = d.repetidos.length
     ? `<div class="evo-rep"><strong>Em mais de uma dupla:</strong> ${d.repetidos.map(r => `<span class="evo-chip evo-chip-rep">${escapeHtml(r.nome)}<sup>×${r.total}</sup></span> <span class="evo-rep-det">${Object.entries(r.porPos).map(([t, n]) => n > 1 ? `${t} (${n})` : t).join(", ")}</span>`).join(" · ")}</div>` : "";
@@ -553,7 +558,7 @@ export function renderEvolucao(root, state){
       </div>
       <div class="card card-pad" style="margin-bottom:16px;">
         <div class="card-title">Melhores duplas por posição</div>
-        <div class="card-sub">Pela nota média de cada jogador <strong>na posição em que jogou</strong> (a da escalação, não a do cadastro) em ${filtroAno}. A nota da dupla é a média das duas; mostramos as 3 melhores de cada posição, e quem aparece em mais de uma dupla fica em destaque dourado, com o número de duplas.</div>
+        <div class="card-sub">Pela nota média de cada jogador <strong>na posição em que jogou</strong> (a da escalação, não a do cadastro) em ${filtroAno}. Só entra quem atuou em <strong>pelo menos 2 jogos avaliados</strong> na posição. Se o jogador mudou de posição na partida (uma na escalação inicial e outra na final), a nota daquela partida vale para as duas posições. A nota da dupla é a média das duas; mostramos as 3 melhores de cada posição, e quem aparece em mais de uma dupla fica em dourado, com o número de duplas.</div>
         ${htmlDuplas(duplas)}
         <div class="evo-rodape">“j” = jogos avaliados na posição. A dupla é a combinação das melhores notas; “juntos” mostra em quantos jogos os dois atuaram na posição ao mesmo tempo. Goleiro fica de fora (é um só em campo).</div>
       </div>
