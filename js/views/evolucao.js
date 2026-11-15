@@ -404,11 +404,12 @@ function melhoresDuplas(jogadores, doAnoJogos){
     duplas.sort((x, y) => y.nota - x.nota || y.juntos - x.juntos || (y.a.jogos.size + y.b.jogos.size) - (x.a.jogos.size + x.b.jogos.size));
     return { pos, titulo: TITULO_POSICAO[pos] || pos, candidatos: el.length, duplas: duplas.slice(0, 3) };
   });
-  // quantas duplas cada jogador integra (em todo o quadro) e onde
+  // em quantas posições diferentes cada jogador integra alguma das melhores duplas
   const contagem = {};
   blocos.forEach(b => b.duplas.forEach(d => [d.a, d.b].forEach(j => {
     const c = contagem[j.id] = contagem[j.id] || { nome: j.nome, total: 0, porPos: {} };
-    c.total++; c.porPos[b.titulo] = (c.porPos[b.titulo] || 0) + 1;
+    // conta POSIÇÕES distintas (aparecer em 1º e 3º da mesma posição vale 1)
+    if (!c.porPos[b.titulo]){ c.porPos[b.titulo] = 1; c.total++; }
   })));
   const repetidos = Object.values(contagem).filter(c => c.total > 1).sort((x, y) => y.total - x.total || x.nome.localeCompare(y.nome, "pt-BR"));
   return { blocos, contagem, repetidos };
@@ -418,7 +419,7 @@ function htmlDuplas(d){
   if (!d.blocos.some(b => b.duplas.length)) return `<p style="color:var(--ink-faint); font-size:13px; margin:8px 0 0;">Ainda não há notas suficientes por posição neste ano: cada dupla precisa de dois jogadores com pelo menos 2 jogos avaliados na mesma posição.</p>`;
   const chip = (j) => {
     const n = d.contagem[j.id]?.total || 1;
-    return `<span class="evo-chip${n > 1 ? " evo-chip-rep" : ""}" ${n > 1 ? `title="${escapeHtml(j.nome)} aparece em ${n} duplas"` : ""}>${escapeHtml(j.nome)}${n > 1 ? `<sup>×${n}</sup>` : ""}</span>`;
+    return `<span class="evo-chip${n > 1 ? " evo-chip-rep" : ""}" ${n > 1 ? `title="${escapeHtml(j.nome)} aparece em ${n} posições"` : ""}>${escapeHtml(j.nome)}${n > 1 ? `<sup>×${n}</sup>` : ""}</span>`;
   };
   const blocos = d.blocos.map(b => `
     <div class="evo-pos-bloco">
@@ -433,9 +434,7 @@ function htmlDuplas(d){
           <div class="evo-dupla-nota">${fmt1(x.nota)}</div>
         </div>`).join("") : `<p class="evo-vazio">Ainda não há 2 jogadores com ${MIN_JOGOS_POSICAO}+ jogos avaliados nessa posição.</p>`}
     </div>`).join("");
-  const rep = d.repetidos.length
-    ? `<div class="evo-rep"><strong>Em mais de uma dupla:</strong> ${d.repetidos.map(r => `<span class="evo-chip evo-chip-rep">${escapeHtml(r.nome)}<sup>×${r.total}</sup></span> <span class="evo-rep-det">${Object.entries(r.porPos).map(([t, n]) => n > 1 ? `${t} (${n})` : t).join(", ")}</span>`).join(" · ")}</div>` : "";
-  return `${rep}<div class="evo-duplas">${blocos}</div>`;
+  return `<div class="evo-duplas">${blocos}</div>`;
 }
 
 export function renderEvolucao(root, state){
@@ -545,7 +544,7 @@ export function renderEvolucao(root, state){
     const prod = producaoDeGols(doAnoJogos, jogadores, meses, ultimoMes);
     const faixas = faixasDeNota(doAnoJogos, porConfronto);
     const duplas = melhoresDuplas(jogadores, doAnoJogos);
-    if (duplas.repetidos.length) extras.push(`<strong>Duplas:</strong> ${duplas.repetidos.slice(0, 3).map(r => `${escapeHtml(r.nome)} aparece em ${r.total} das melhores duplas (${Object.entries(r.porPos).map(([t, n]) => n > 1 ? `${t} ×${n}` : t).join(", ")})`).join("; ")}.`);
+    if (duplas.repetidos.length) extras.push(`<strong>Duplas:</strong> ${duplas.repetidos.slice(0, 3).map(r => `${escapeHtml(r.nome)} está entre as melhores duplas em ${r.total} posições (${Object.keys(r.porPos).join(", ")})`).join("; ")}.`);
     const fraseFaixas = leituraFaixas(faixas);
     if (fraseFaixas) extras.push(fraseFaixas);
     if (prod.quentes.length) extras.push(`<strong>Esquentando:</strong> ${prod.quentes.map(x => `${escapeHtml(x.atleta.nome)} (${fmt1(x.rr)} gols + assistências por partida em ${prod.janela}, contra ${fmt1(x.ra)} antes)`).join("; ")}.`);
@@ -558,7 +557,7 @@ export function renderEvolucao(root, state){
       </div>
       <div class="card card-pad" style="margin-bottom:16px;">
         <div class="card-title">Melhores duplas por posição</div>
-        <div class="card-sub">Pela nota média de cada jogador <strong>na posição em que jogou</strong> (a da escalação, não a do cadastro) em ${filtroAno}. Só entra quem atuou em <strong>pelo menos 2 jogos avaliados</strong> na posição. Se o jogador mudou de posição na partida (uma na escalação inicial e outra na final), a nota daquela partida vale para as duas posições. A nota da dupla é a média das duas; mostramos as 3 melhores de cada posição, e quem aparece em mais de uma dupla fica em dourado, com o número de duplas.</div>
+        <div class="card-sub">Pela nota média de cada jogador <strong>na posição em que jogou</strong> (a da escalação, não a do cadastro) em ${filtroAno}. Só entra quem atuou em <strong>pelo menos 2 jogos avaliados</strong> na posição. Se o jogador mudou de posição na partida (uma na escalação inicial e outra na final), a nota daquela partida vale para as duas posições. A nota da dupla é a média das duas; mostramos as 3 melhores de cada posição. Quem aparece em mais de uma <strong>posição</strong> fica em dourado, com o número de posições (“×3” = está entre as melhores duplas de 3 posições).</div>
         ${htmlDuplas(duplas)}
         <div class="evo-rodape">“j” = jogos avaliados na posição. A dupla é a combinação das melhores notas; “juntos” mostra em quantos jogos os dois atuaram na posição ao mesmo tempo. Goleiro fica de fora (é um só em campo).</div>
       </div>
