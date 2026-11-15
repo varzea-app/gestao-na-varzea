@@ -203,8 +203,7 @@ export function renderDashboard(root, state){
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi-tile"><div class="kpi-label">${r.temQuadros ? "Qtde partidas" : "Jogos realizados"}</div><div class="kpi-value">${r.qtdJogos}</div></div>
-      ${r.temQuadros ? `<div class="kpi-tile"><div class="kpi-label">Qtde confrontos</div><div class="kpi-value">${r.qtdConfrontos}</div></div>` : ""}
+      <div class="kpi-tile"><div class="kpi-label">${r.temQuadros ? "Partidas / confrontos" : "Jogos realizados"}</div><div class="kpi-value">${r.qtdJogos}${r.temQuadros ? `<span class="unit">/ ${r.qtdConfrontos}</span>` : ""}</div></div>
       <div class="kpi-tile"><div class="kpi-label">Gols</div><div class="kpi-value">${r.qtdGols}</div></div>
       <div class="kpi-tile"><div class="kpi-label">Saldo de gols</div><div class="kpi-value">${saldo.saldo > 0 ? "+" : ""}${saldo.saldo}</div></div>
       <div class="kpi-tile"><div class="kpi-label">% de assistência</div><div class="kpi-value">${pctAssistencia}<span class="unit">%</span></div></div>
