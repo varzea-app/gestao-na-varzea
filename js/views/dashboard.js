@@ -97,6 +97,11 @@ export function renderDashboard(root, state){
   const r = resumoGeral(realizadosFiltrados, porConfronto);
   const saldo = saldoGols(realizadosFiltrados);
   const pctAssistencia = r.qtdGols > 0 ? Math.round((r.qtdAssistencias / r.qtdGols) * 100) : 0;
+  // Gols por partida: gols do período ÷ partidas realizadas no período.
+  const golsPorPartida = r.qtdJogos > 0 ? r.qtdGols / r.qtdJogos : null;
+  // Aproveitamento: pontos conquistados ÷ pontos disputados (vitória 3, empate 1), como no campeonato.
+  const decididos = r.vitorias + r.empates + r.derrotas;
+  const aproveitamento = decididos > 0 ? Math.round(((r.vitorias * 3 + r.empates) / (decididos * 3)) * 100) : null;
   const jogadores = state.atletas.filter(ehJogador);
   // No Geral com quadros, os dois quadros do mesmo dia e adversário viram 1 confronto (placar somado).
   const recentes = (lista) => (porConfronto ? jogosPorConfronto(lista) : [...lista]).sort((a, b) => ordemCronologica(b, a));
@@ -203,8 +208,8 @@ export function renderDashboard(root, state){
       <div class="kpi-tile"><div class="kpi-label">Gols</div><div class="kpi-value">${r.qtdGols}</div></div>
       <div class="kpi-tile"><div class="kpi-label">Saldo de gols</div><div class="kpi-value">${saldo.saldo > 0 ? "+" : ""}${saldo.saldo}</div></div>
       <div class="kpi-tile"><div class="kpi-label">% de assistência</div><div class="kpi-value">${pctAssistencia}<span class="unit">%</span></div></div>
-      <div class="kpi-tile"><div class="kpi-label">Aproveitamento${porConfronto ? " (confrontos)" : ""}</div><div class="kpi-value small">${r.vitorias}V <span class="unit">${r.empates}E</span> <span class="unit">${r.derrotas}D</span></div></div>
-      <div class="kpi-tile"><div class="kpi-label">Nota média jogadores</div><div class="kpi-value">${fmt1(r.mediaJogadores)}</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Gols por partida</div><div class="kpi-value">${fmt1(golsPorPartida)}</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Aproveitamento${porConfronto ? " (confrontos)" : ""}</div><div class="kpi-value">${aproveitamento === null ? "—" : `${aproveitamento}<span class="unit">%</span>`}</div><div class="kpi-rank">${r.vitorias}V · ${r.empates}E · ${r.derrotas}D</div></div>
     </div>
 
     ${proximo ? `
