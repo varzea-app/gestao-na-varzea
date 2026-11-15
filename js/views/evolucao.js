@@ -1,5 +1,6 @@
 import { $, escapeHtml, fmt1 } from "../utils.js";
-import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, mediaNotaJogadoresNoJogo, golsEAssistenciasPorAtleta, resultadoJogo } from "../stats.js";
+import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, mediaNotaJogadoresNoJogo, golsEAssistenciasPorAtleta, resultadoJogo, notasDoAtletaNoJogo, posicaoJogadaNoJogo } from "../stats.js";
+import { posicoesDaModalidade, posicaoNaModalidade, ordemPosicao } from "../modalidade.js";
 import { MESES, anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 
 // Evolução do ano: mês a mês, como o time (ou um jogador) foi indo.
@@ -356,6 +357,82 @@ function leituraFaixas(f){
   return `<strong>Nota e resultado:</strong> pouca diferença entre as faixas (${pct(baixa.aprov)} nas notas mais baixas e ${pct(alta.aprov)} nas mais altas) — neste ano, a nota do jogo não previu bem o resultado.`;
 }
 
+// ----------------------------------------------------------------------------
+// Melhores duplas por posição (pela posição JOGADA, não a de cadastro)
+// ----------------------------------------------------------------------------
+const TITULO_POSICAO = { Zagueiro: "Zaga", Lateral: "Laterais", Volante: "Volantes", Meia: "Meio-campo", Atacante: "Ataque", Fixo: "Fixo", Ala: "Alas", "Pivô": "Pivôs" };
+
+// posição -> atletaId -> { notas, jogos:Set }. Mesma regra do restante do app: posição da escalação
+// (final, depois inicial); sem ela, a de cadastro; partidas antigas são levadas ao vocabulário da modalidade.
+function notasPorPosicaoJogada(jogadores, doAnoJogos){
+  const porId = new Map(jogadores.map(a => [a.id, a]));
+  const mapa = {};
+  doAnoJogos.forEach(j => {
+    Object.keys(j.avaliacoesJogadores || {}).forEach(id => {
+      const a = porId.get(id); if (!a) return;
+      const notas = notasDoAtletaNoJogo(j, id); if (!notas.length) return;
+      let pos = posicaoJogadaNoJogo(j, id) || a.posicao || null;
+      if (pos) pos = posicaoNaModalidade(pos);
+      if (!pos) return;
+      const x = ((mapa[pos] = mapa[pos] || {})[id] = mapa[pos][id] || { notas: [], jogos: new Set() });
+      x.notas.push(...notas); x.jogos.add(j.id);
+    });
+  });
+  return mapa;
+}
+
+function melhoresDuplas(jogadores, doAnoJogos){
+  const nomes = new Map(jogadores.map(a => [a.id, a.nome]));
+  const mapa = notasPorPosicaoJogada(jogadores, doAnoJogos);
+  const posicoes = posicoesDaModalidade().filter(p => p !== "Goleiro").sort((a, b) => ordemPosicao(a) - ordemPosicao(b));
+  const blocos = posicoes.map(pos => {
+    const todos = Object.entries(mapa[pos] || {}).map(([id, x]) => ({ id, nome: nomes.get(id), media: soma(x.notas, n => n) / x.notas.length, jogos: x.jogos }));
+    // prefere quem tem 2+ jogos na posição; se isso não formar ao menos uma dupla, aceita 1
+    let minJogos = 2, el = todos.filter(t => t.jogos.size >= 2);
+    if (el.length < 2){ minJogos = 1; el = todos; }
+    const duplas = [];
+    for (let i = 0; i < el.length; i++) for (let k = i + 1; k < el.length; k++){
+      const a = el[i], b = el[k];
+      duplas.push({ a, b, nota: (a.media + b.media) / 2, juntos: [...a.jogos].filter(x => b.jogos.has(x)).length });
+    }
+    duplas.sort((x, y) => y.nota - x.nota || y.juntos - x.juntos || (y.a.jogos.size + y.b.jogos.size) - (x.a.jogos.size + x.b.jogos.size));
+    return { pos, titulo: TITULO_POSICAO[pos] || pos, minJogos, candidatos: el.length, duplas: duplas.slice(0, 3) };
+  });
+  // quantas duplas cada jogador integra (em todo o quadro) e onde
+  const contagem = {};
+  blocos.forEach(b => b.duplas.forEach(d => [d.a, d.b].forEach(j => {
+    const c = contagem[j.id] = contagem[j.id] || { nome: j.nome, total: 0, porPos: {} };
+    c.total++; c.porPos[b.titulo] = (c.porPos[b.titulo] || 0) + 1;
+  })));
+  const repetidos = Object.values(contagem).filter(c => c.total > 1).sort((x, y) => y.total - x.total || x.nome.localeCompare(y.nome, "pt-BR"));
+  return { blocos, contagem, repetidos };
+}
+
+function htmlDuplas(d){
+  if (!d.blocos.some(b => b.duplas.length)) return `<p style="color:var(--ink-faint); font-size:13px; margin:8px 0 0;">Ainda não há notas suficientes por posição neste ano: cada dupla precisa de dois jogadores avaliados na mesma posição.</p>`;
+  const chip = (j) => {
+    const n = d.contagem[j.id]?.total || 1;
+    return `<span class="evo-chip${n > 1 ? " evo-chip-rep" : ""}" ${n > 1 ? `title="${escapeHtml(j.nome)} aparece em ${n} duplas"` : ""}>${escapeHtml(j.nome)}${n > 1 ? `<sup>×${n}</sup>` : ""}</span>`;
+  };
+  const blocos = d.blocos.map(b => `
+    <div class="evo-pos-bloco">
+      <div class="evo-pos-titulo">${escapeHtml(b.titulo)}</div>
+      ${b.duplas.length ? b.duplas.map((x, i) => `
+        <div class="evo-dupla${i === 0 ? " evo-dupla-top" : ""}">
+          <span class="evo-dupla-rank">${i + 1}º</span>
+          <div class="evo-dupla-corpo">
+            <div class="evo-dupla-nomes">${chip(x.a)} <span class="evo-mais">+</span> ${chip(x.b)}</div>
+            <div class="evo-dupla-sub">${escapeHtml(x.a.nome)} ${fmt1(x.a.media)} (${x.a.jogos.size}j) · ${escapeHtml(x.b.nome)} ${fmt1(x.b.media)} (${x.b.jogos.size}j) · ${x.juntos ? `juntos em ${plural(x.juntos, "jogo", "jogos")}` : "ainda não jogaram juntos"}</div>
+          </div>
+          <div class="evo-dupla-nota">${fmt1(x.nota)}</div>
+        </div>`).join("") : `<p class="evo-vazio">Menos de 2 jogadores avaliados nessa posição.</p>`}
+      ${b.duplas.length && b.minJogos === 1 ? `<div class="evo-rodape">Poucos jogos na posição: base pequena.</div>` : ""}
+    </div>`).join("");
+  const rep = d.repetidos.length
+    ? `<div class="evo-rep"><strong>Em mais de uma dupla:</strong> ${d.repetidos.map(r => `<span class="evo-chip evo-chip-rep">${escapeHtml(r.nome)}<sup>×${r.total}</sup></span> <span class="evo-rep-det">${Object.entries(r.porPos).map(([t, n]) => n > 1 ? `${t} (${n})` : t).join(", ")}</span>`).join(" · ")}</div>` : "";
+  return `${rep}<div class="evo-duplas">${blocos}</div>`;
+}
+
 export function renderEvolucao(root, state){
   wireQuadroChips(root, () => renderEvolucao(root, state));
   const realizados = jogosRealizados(filtrarPorQuadro(state.jogos));
@@ -462,6 +539,8 @@ export function renderEvolucao(root, state){
   if (!atleta){
     const prod = producaoDeGols(doAnoJogos, jogadores, meses, ultimoMes);
     const faixas = faixasDeNota(doAnoJogos, porConfronto);
+    const duplas = melhoresDuplas(jogadores, doAnoJogos);
+    if (duplas.repetidos.length) extras.push(`<strong>Duplas:</strong> ${duplas.repetidos.slice(0, 3).map(r => `${escapeHtml(r.nome)} aparece em ${r.total} das melhores duplas (${Object.entries(r.porPos).map(([t, n]) => n > 1 ? `${t} ×${n}` : t).join(", ")})`).join("; ")}.`);
     const fraseFaixas = leituraFaixas(faixas);
     if (fraseFaixas) extras.push(fraseFaixas);
     if (prod.quentes.length) extras.push(`<strong>Esquentando:</strong> ${prod.quentes.map(x => `${escapeHtml(x.atleta.nome)} (${fmt1(x.rr)} gols + assistências por partida em ${prod.janela}, contra ${fmt1(x.ra)} antes)`).join("; ")}.`);
@@ -471,6 +550,12 @@ export function renderEvolucao(root, state){
         <div class="card-title">Quem produz os gols</div>
         <div class="card-sub">Gols + assistências dos jogadores que mais participaram de gols em ${filtroAno}, mês a mês.</div>
         ${tabelaProducao(prod, meses, ultimoMes)}
+      </div>
+      <div class="card card-pad" style="margin-bottom:16px;">
+        <div class="card-title">Melhores duplas por posição</div>
+        <div class="card-sub">Pela nota média de cada jogador <strong>na posição em que jogou</strong> (a da escalação, não a do cadastro) em ${filtroAno}. A nota da dupla é a média das duas; mostramos as 3 melhores de cada posição, e quem aparece em mais de uma dupla fica em destaque dourado, com o número de duplas.</div>
+        ${htmlDuplas(duplas)}
+        <div class="evo-rodape">“j” = jogos avaliados na posição. A dupla é a combinação das melhores notas; “juntos” mostra em quantos jogos os dois atuaram na posição ao mesmo tempo. Goleiro fica de fora (é um só em campo).</div>
       </div>
       <div class="card card-pad" style="margin-bottom:16px;">
         <div class="card-title">Resultado por faixa de nota</div>
