@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, formatDate, toast, fmt1, avg } from "../utils.js";
-import { jogosRealizados, jogadoresDaPartida, rotuloQuadro, posicaoJogadaNoJogo, notaDoVotanteNoJogo, notasDoAtletaNoJogo } from "../stats.js";
+import { jogosRealizados, jogadoresDaPartida, rotuloQuadro, posicaoJogadaNoJogo, notaDoVotanteNoJogo, notasDoAtletaNoJogo, contaParaNota } from "../stats.js";
 import { updateJogoField } from "../db.js";
 
 let votanteId = "";
@@ -103,6 +103,7 @@ export function renderAvaliacao(root, state){
         ` : jogadoresParaAvaliar.length === 0 ? `
           <div class="empty-state"><h3>Nada pra avaliar aqui</h3><p>Você é o único jogador escalado nessa partida, e não é possível avaliar a si próprio.</p></div>
         ` : `
+          ${!contaParaNota(jogo) ? `<div class="card-sub" style="margin:0 0 10px;">🏆 Partida de campeonato: as notas ficam registradas, mas <strong>não entram nas médias</strong> (ranking, dashboard e relatórios).</div>` : ""}
           <div class="av-lista">
             ${jogadoresParaAvaliar.map(a => {
               const posicaoJogada = posicaoJogadaNoJogo(jogo, a.id) || a.posicao || "—";

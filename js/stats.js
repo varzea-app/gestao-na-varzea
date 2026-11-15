@@ -224,6 +224,15 @@ export function notaDoVotanteNoJogo(jogo, atletaId, votanteId){
   return typeof entry[votanteId]?.nota === "number" ? entry[votanteId].nota : null;
 }
 
+// Critério das notas dos jogadores: partidas de Campeonato não entram nas médias
+// (ranking, dashboard, escalação ideal, premiações, evolução). As notas dessas
+// partidas continuam sendo lançadas e aparecem jogo a jogo; só não contam no
+// cálculo. Partida sem tipo informado conta (não dá para saber que é campeonato).
+export const TIPOS_FORA_DA_NOTA = ["campeonato"];
+export function contaParaNota(jogo){
+  return !TIPOS_FORA_DA_NOTA.includes(String(jogo?.tipoPartida || "").trim().toLowerCase());
+}
+
 // Nota média de todos os jogadores avaliados numa partida específica — usada
 // para o ranking "melhores partidas" do Dashboard.
 export function mediaNotaJogadoresNoJogo(jogo){
@@ -236,7 +245,7 @@ export function mediaNotaJogadoresNoJogo(jogo){
 
 export function mediaNotaAtleta(atletaId, jogos, votanteIds = null){
   const notas = [];
-  jogosRealizados(jogos).forEach(j => notas.push(...notasDoAtletaNoJogo(j, atletaId, votanteIds)));
+  jogosRealizados(jogos).filter(contaParaNota).forEach(j => notas.push(...notasDoAtletaNoJogo(j, atletaId, votanteIds)));
   return { media: avg(notas), qtd: notas.length };
 }
 
@@ -247,7 +256,7 @@ export function mediaNotaAtleta(atletaId, jogos, votanteIds = null){
 // usa a posição de cadastro do atleta como fallback só para não perder o dado.
 export function notasPorPosicao(atletas, jogos, mapearPosicao = null){
   const map = {}; // atletaId -> { posicao -> notas[] }
-  jogosRealizados(jogos).forEach(j => {
+  jogosRealizados(jogos).filter(contaParaNota).forEach(j => {
     Object.keys(j.avaliacoesJogadores || {}).forEach(atletaId => {
       const notas = notasDoAtletaNoJogo(j, atletaId);
       if (notas.length === 0) return;
@@ -272,7 +281,7 @@ export function notasPorPosicao(atletas, jogos, mapearPosicao = null){
 
 export function mediaGeralJogadores(jogos){
   const todasNotas = [];
-  jogosRealizados(jogos).forEach(j => {
+  jogosRealizados(jogos).filter(contaParaNota).forEach(j => {
     Object.keys(j.avaliacoesJogadores || {}).forEach(atletaId => {
       todasNotas.push(...notasDoAtletaNoJogo(j, atletaId));
     });

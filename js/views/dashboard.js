@@ -1,7 +1,7 @@
 import { TEAM, hashtags, linkDoTime } from "../tenant.js";
 import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, formatDate, fmt1, toast, getTheme, toggleTheme, reRenderKeepingFocus, todayISO } from "../utils.js";
-import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo, ordemCronologica, rotuloQuadro, jogosPorConfronto } from "../stats.js";
+import { resumoGeral, resultadoJogo, desempateJogo, jogosRealizados, saldoGols, ehJogador, statsPorAtleta, notasDoAtletaNoJogo, contaParaNota, ordemCronologica, rotuloQuadro, jogosPorConfronto } from "../stats.js";
 import { listenPresencas } from "../db.js";
 import { getFiltroPeriodo, setFiltroPeriodo, filtrarPorPeriodo, anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 
@@ -110,9 +110,10 @@ export function renderDashboard(root, state){
   // Destaques do período (seguem o filtro de ano/mês).
   const statsPeriodo = statsPorAtleta(jogadores, realizadosFiltrados);
   const porNome = (a, b) => (a.atleta.nome || "").localeCompare(b.atleta.nome || "", "pt-BR");
-  const jogosAvaliados = realizadosFiltrados.filter(j => Object.keys(j.avaliacoesJogadores || {}).some(id => notasDoAtletaNoJogo(j, id).length > 0)).length;
+  const paraNota = realizadosFiltrados.filter(contaParaNota);   // campeonato não entra nas notas
+  const jogosAvaliados = paraNota.filter(j => Object.keys(j.avaliacoesJogadores || {}).some(id => notasDoAtletaNoJogo(j, id).length > 0)).length;
   const minNota = Math.min(5, Math.max(1, Math.ceil(jogosAvaliados * 0.4)));
-  const comNota = (id) => realizadosFiltrados.filter(j => notasDoAtletaNoJogo(j, id).length > 0).length;
+  const comNota = (id) => paraNota.filter(j => notasDoAtletaNoJogo(j, id).length > 0).length;
   const lider = (lista, metric, desempate) => lista.sort((a, b) => metric(b) - metric(a) || desempate(a, b) || porNome(a, b)).slice(0, 3);
   const destaques = [
     { label: "Artilheiro", unid: "gols", lista: lider(statsPeriodo.filter(s => s.gols > 0), s => s.gols, (a, b) => b.assistencias - a.assistencias), val: s => s.gols, fmt: s => String(s.gols) },

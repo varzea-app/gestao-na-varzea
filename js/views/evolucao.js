@@ -1,5 +1,5 @@
 import { $, escapeHtml, fmt1 } from "../utils.js";
-import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, mediaNotaJogadoresNoJogo, golsEAssistenciasPorAtleta, resultadoJogo, notasDoAtletaNoJogo, normalizeEscalacao } from "../stats.js";
+import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, mediaNotaJogadoresNoJogo, golsEAssistenciasPorAtleta, resultadoJogo, notasDoAtletaNoJogo, normalizeEscalacao, contaParaNota } from "../stats.js";
 import { posicoesDaModalidade, posicaoNaModalidade, ordemPosicao } from "../modalidade.js";
 import { MESES, anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 
@@ -41,7 +41,7 @@ function calcularMeses(realizadosAno, atleta, porConfronto){
     const st = atleta ? statsPorAtleta([atleta], doMes)[0] : null;
     meses.push({
       m, curto: MES_CURTO[m - 1], nome: MESES[m - 1],
-      partidas: doMes.length, nUn, v, e, d,
+      partidas: doMes.length, partidasNota: doMes.filter(contaParaNota).length, nUn, v, e, d,
       aprov: nUn ? (v * 3 + e) / (nUn * 3) * 100 : null,
       pts: v * 3 + e,
       nPlacar: comPlacar.length, golsPro, golsContra,
@@ -202,7 +202,7 @@ function leitura(meses, ctx){
     }
     out.push(f);
   }
-  const mesesJogoSemNota = meses.filter(x => (atleta ? x.jogou > 0 : x.partidas > 0) && !num(x.nota));
+  const mesesJogoSemNota = meses.filter(x => (atleta ? x.jogou > 0 && x.partidasNota > 0 : x.partidasNota > 0) && !num(x.nota));
   if (mesesJogoSemNota.length && comNota.length) out.push(`<strong>Atenção:</strong> ${lista(mesesJogoSemNota.map(x => x.nome))} ${mesesJogoSemNota.length === 1 ? "teve jogos mas não tem" : "tiveram jogos mas não têm"} notas lançadas, então ${mesesJogoSemNota.length === 1 ? "esse mês fica" : "esses meses ficam"} em branco no gráfico de notas.`);
 
   if (!atleta){
@@ -318,7 +318,7 @@ function tabelaProducao(prod, meses, ultimoMes){
 function notaDaUnidade(u){
   const js = u.jogosOriginais || [u];
   let soma_ = 0, qtd = 0;
-  js.forEach(j => { const r = mediaNotaJogadoresNoJogo(j); if (r.qtd){ soma_ += r.media * r.qtd; qtd += r.qtd; } });
+  js.filter(contaParaNota).forEach(j => { const r = mediaNotaJogadoresNoJogo(j); if (r.qtd){ soma_ += r.media * r.qtd; qtd += r.qtd; } });
   return qtd ? soma_ / qtd : null;
 }
 
@@ -370,7 +370,7 @@ const TITULO_POSICAO = { Zagueiro: "Zaga", Lateral: "Laterais", Volante: "Volant
 function notasPorPosicaoJogada(jogadores, doAnoJogos){
   const porId = new Map(jogadores.map(a => [a.id, a]));
   const mapa = {};
-  doAnoJogos.forEach(j => {
+  doAnoJogos.filter(contaParaNota).forEach(j => {
     const ini = new Map(normalizeEscalacao(j.escalacaoInicial).map(e => [e.atletaId, e.posicao]));
     const fin = new Map(normalizeEscalacao(j.escalacaoFinal).map(e => [e.atletaId, e.posicao]));
     Object.keys(j.avaliacoesJogadores || {}).forEach(id => {
@@ -575,7 +575,7 @@ export function renderEvolucao(root, state){
     <div class="kpi-grid">${kpis.map(([l, v]) => `<div class="kpi-tile"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div>`).join("")}</div>
     <div class="evo-grid">
       ${cardGrafico(atleta ? "Aproveitamento do time com ele em campo" : "Aproveitamento mês a mês", `Pontos conquistados ÷ pontos disputados (vitória 3, empate 1) em ${filtroAno}.`, gAprov, `<div class="evo-rodape">Linha tracejada = média do ano (${aprovAno === null ? "—" : Math.round(aprovAno) + "%"}).${algumPouco ? ` Círculo vazado = mês com apenas 1 ${un}.` : ""}</div>`)}
-      ${cardGrafico(atleta ? "Nota média do jogador" : "Nota média dos jogadores", atleta ? "Média das notas que ele recebeu em cada mês." : "Média de todas as notas dadas aos jogadores em cada mês.", gNota, `<div class="evo-rodape">Linha tracejada = média do ano (${fmt1(notaAno)}).</div>`)}
+      ${cardGrafico(atleta ? "Nota média do jogador" : "Nota média dos jogadores", atleta ? "Média das notas que ele recebeu em cada mês." : "Média de todas as notas dadas aos jogadores em cada mês.", gNota, `<div class="evo-rodape">Linha tracejada = média do ano (${fmt1(notaAno)}). Partidas de campeonato não entram no cálculo das notas.</div>`)}
       ${cardGrafico(t3, s3, g3, leg3)}
       ${cardGrafico(t4, s4, g4, leg4)}
     </div>

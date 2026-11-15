@@ -3,7 +3,7 @@ import { filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.j
 import { $, escapeHtml, formatDate, fmt1, avg } from "../utils.js";
 import {
   ehJogador, jogosRealizados, normalizeEscalacao, idsDaPartida, posicaoJogadaNoJogo, statsPorAtleta,
-  notasDoAtletaNoJogo, resultadoJogo, desempateJogo, GOL_CONTRA_ID,
+  notasDoAtletaNoJogo, resultadoJogo, desempateJogo, GOL_CONTRA_ID, contaParaNota,
 } from "../stats.js";
 
 // Filtro de ano (módulo, pra sobreviver entre re-renders e à troca de jogador).
@@ -133,7 +133,7 @@ function extratoHtml(atleta, state, ano){
   const ga = s.gols + s.assistencias;
 
   // ---- Notas jogo a jogo (do mais antigo ao mais novo) ----
-  const comNota = [...jogos].reverse().map(j => ({ j, nota: avg(notasDoAtletaNoJogo(j, atleta.id)) })).filter(x => x.nota !== null);
+  const comNota = [...jogos].reverse().filter(contaParaNota).map(j => ({ j, nota: avg(notasDoAtletaNoJogo(j, atleta.id)) })).filter(x => x.nota !== null);
   const pontosNota = comNota.slice(-15).map(x => ({
     nota: x.nota,
     rotulo: `${formatDate(x.j.data)} vs ${nomeAdv(x.j.adversarioId)}`,

@@ -1,7 +1,7 @@
 import { TEAM, hashtags } from "../tenant.js";
 import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, fmt1, toast, avg } from "../utils.js";
-import { ehJogador, jogosRealizados, statsPorAtleta, notasDoAtletaNoJogo, resultadoJogo } from "../stats.js";
+import { ehJogador, jogosRealizados, statsPorAtleta, notasDoAtletaNoJogo, resultadoJogo, contaParaNota } from "../stats.js";
 import { anosDisponiveis, MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 import { openImagemModal, iniciais } from "./flyer.js";
 
@@ -28,8 +28,9 @@ function nomesTexto(itens, limite = 2){
 function calcularPremios(jogadores, jogos){
   const base = statsPorAtleta(jogadores, jogos).filter(s => s.jogosCount > 0 || s.gols > 0 || s.assistencias > 0);
   const asc = [...jogos].sort((a, b) => (a.data || "").localeCompare(b.data || ""));
-  const comNota = (id) => jogos.filter(j => notasDoAtletaNoJogo(j, id).length > 0).length;
-  const jogosAvaliados = jogos.filter(j => Object.keys(j.avaliacoesJogadores || {}).some(id => notasDoAtletaNoJogo(j, id).length > 0)).length;
+  const paraNota = jogos.filter(contaParaNota);   // campeonato não entra nas notas
+  const comNota = (id) => paraNota.filter(j => notasDoAtletaNoJogo(j, id).length > 0).length;
+  const jogosAvaliados = paraNota.filter(j => Object.keys(j.avaliacoesJogadores || {}).some(id => notasDoAtletaNoJogo(j, id).length > 0)).length;
   const minNota = Math.min(5, Math.max(1, Math.ceil(jogosAvaliados * 0.4)));
   const porNome = (a, b) => (a.atleta.nome || "").localeCompare(b.atleta.nome || "", "pt-BR");
 
@@ -38,7 +39,7 @@ function calcularPremios(jogadores, jogos){
     const id = s.atleta.id;
     let golsVit = 0;
     asc.forEach(j => { if (resultadoJogo(j) === "vitoria") (j.golsAssistencias || []).forEach(e => { if (e.atletaGolId === id) golsVit++; }); });
-    const notas = asc.map(j => avg(notasDoAtletaNoJogo(j, id))).filter(n => n !== null);
+    const notas = asc.filter(contaParaNota).map(j => avg(notasDoAtletaNoJogo(j, id))).filter(n => n !== null);
     let delta = null;
     if (notas.length >= 4){
       const meio = Math.floor(notas.length / 2);
