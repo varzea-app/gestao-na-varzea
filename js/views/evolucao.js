@@ -557,9 +557,9 @@ export function renderEvolucao(root, state){
       </div>
       <div class="card card-pad" style="margin-bottom:16px;">
         <div class="card-title">Melhores duplas por posição</div>
-        <div class="card-sub">Pela nota média de cada jogador <strong>na posição em que jogou</strong> (a da escalação, não a do cadastro) em ${filtroAno}. Só entra quem atuou em <strong>pelo menos 2 jogos avaliados</strong> na posição. Se o jogador mudou de posição na partida (uma na escalação inicial e outra na final), a nota daquela partida vale para as duas posições. A nota da dupla é a média das duas; mostramos as 3 melhores de cada posição. Quem aparece em mais de uma <strong>posição</strong> fica em dourado, com o número de posições (“×3” = está entre as melhores duplas de 3 posições).</div>
+        <div class="card-sub">As 3 melhores duplas de cada posição em ${filtroAno}, pela nota média na posição jogada. Dourado = jogador em mais de uma posição (×N).</div>
         ${htmlDuplas(duplas)}
-        <div class="evo-rodape">“j” = jogos avaliados na posição. A dupla é a combinação das melhores notas; “juntos” mostra em quantos jogos os dois atuaram na posição ao mesmo tempo. Goleiro fica de fora (é um só em campo).</div>
+        <div class="evo-rodape">Só entra quem tem 2+ jogos avaliados na posição (“j”). Quem mudou de posição na partida conta a nota nas duas. A dupla vale a média das duas notas; “juntos” = jogos em que atuaram na posição ao mesmo tempo. Goleiro fica de fora.</div>
       </div>
       <div class="card card-pad" style="margin-bottom:16px;">
         <div class="card-title">Resultado por faixa de nota</div>
