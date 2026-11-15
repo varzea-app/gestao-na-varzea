@@ -808,7 +808,7 @@ export function renderImportar(root, state){
         <div class="eyebrow">Cadastros</div>
         <h1>Importar planilha</h1>
       </div>
-      <a href="#cadastros" class="btn btn-ghost btn-sm">&larr; Voltar</a>
+      <a href="#cadastros" class="btn btn-ghost btn-sm">&larr; Cadastros</a>
     </div>
 
     <div class="card card-pad" style="margin-bottom:14px;">

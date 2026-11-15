@@ -245,10 +245,11 @@ function renderCrudView(root, opts, state){
   root.innerHTML = `
     <div class="topbar">
       <div>
-        <div class="eyebrow">Cadastro</div>
+        <div class="eyebrow">Cadastros</div>
         <h1>${opts.plural}</h1>
       </div>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
+        <a href="#cadastros" class="btn btn-ghost btn-sm">&larr; Cadastros</a>
         ${opts.columnToggle ? `<button class="btn btn-ghost" id="btn-edit-cols">Editar colunas</button>` : ""}
         <button class="btn btn-primary" id="btn-new">+ Novo(a) ${opts.singular}</button>
       </div>

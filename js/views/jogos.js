@@ -301,10 +301,13 @@ export function renderJogosList(root, state){
   root.innerHTML = `
     <div class="topbar">
       <div>
-        <div class="eyebrow">Cadastro</div>
+        <div class="eyebrow">Cadastros</div>
         <h1>Partidas</h1>
       </div>
-      <button class="btn btn-primary" id="btn-new-jogo">+ Novo jogo</button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
+        <a href="#cadastros" class="btn btn-ghost btn-sm">&larr; Cadastros</a>
+        <button class="btn btn-primary" id="btn-new-jogo">+ Novo jogo</button>
+      </div>
     </div>
 
     ${manchete}
