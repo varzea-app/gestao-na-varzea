@@ -1,5 +1,5 @@
 import { $, escapeHtml, fmt1 } from "../utils.js";
-import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, resultadoJogo } from "../stats.js";
+import { jogosRealizados, statsPorAtleta, ehJogador, jogosPorConfronto, idsDaPartida, mediaGeralJogadores, mediaNotaJogadoresNoJogo, golsEAssistenciasPorAtleta, resultadoJogo } from "../stats.js";
 import { MESES, anosDisponiveis, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips, contarPorConfronto } from "../filters.js";
 
 // Evolução do ano: mês a mês, como o time (ou um jogador) foi indo.
@@ -243,6 +243,8 @@ function leitura(meses, ctx){
     else if (r !== null && r <= -0.5) out.push(`<strong>Curioso:</strong> os meses de nota média mais alta foram, em geral, os de aproveitamento mais baixo — vale olhar se as notas estão exigentes ou se o time joga bem mas não converte.`);
   }
 
+  (ctx.extras || []).forEach(t => t && out.push(t));
+
   // Volume e amostra pequena
   const semJogo = meses.filter((x, i) => x.partidas === 0 && i < ctx.ultimoMes);
   if (semJogo.length) out.push(`<strong>Sem partidas:</strong> ${lista(semJogo.map(x => x.nome))}.`);
@@ -255,6 +257,105 @@ function leitura(meses, ctx){
 // ----------------------------------------------------------------------------
 // Tela
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Quem produz os gols: gols + assistências de cada jogador, mês a mês
+// ----------------------------------------------------------------------------
+function producaoDeGols(doAnoJogos, jogadores, meses, ultimoMes){
+  const porMes = [];
+  for (let m = 1; m <= ultimoMes; m++){
+    const mm = String(m).padStart(2, "0");
+    porMes.push(golsEAssistenciasPorAtleta(doAnoJogos.filter(j => (j.data || "").slice(5, 7) === mm)));
+  }
+  const linhas = jogadores.map(a => {
+    const cel = porMes.map(mp => ({ g: mp[a.id]?.gols || 0, a: mp[a.id]?.assistencias || 0 }));
+    return { atleta: a, cel, g: soma(cel, c => c.g), a: soma(cel, c => c.a) };
+  }).filter(l => l.g + l.a > 0).sort((x, y) => (y.g + y.a) - (x.g + x.a) || y.g - x.g || (x.atleta.nome || "").localeCompare(y.atleta.nome || "", "pt-BR"));
+
+  // quem esquentou / esfriou: G+A por partida do time nos últimos meses x nos anteriores
+  const comJogo = meses.slice(0, ultimoMes).map((x, i) => ({ i, partidas: x.partidas })).filter(x => x.partidas > 0);
+  let quentes = [], frios = [], janela = null;
+  if (comJogo.length >= 4){
+    const k = Math.min(3, Math.floor(comJogo.length / 2));
+    const rec = comJogo.slice(-k).map(x => x.i), ant = comJogo.slice(0, -k).map(x => x.i);
+    const pRec = soma(rec, i => meses[i].partidas), pAnt = soma(ant, i => meses[i].partidas);
+    janela = k === 1 ? meses[rec[0]].nome : `${meses[rec[0]].curto}–${meses[rec[k - 1]].curto}`;
+    linhas.forEach(l => {
+      const gaRec = soma(rec, i => l.cel[i].g + l.cel[i].a), gaAnt = soma(ant, i => l.cel[i].g + l.cel[i].a);
+      const rr = gaRec / pRec, ra = gaAnt / pAnt;
+      const item = { atleta: l.atleta, gaRec, gaAnt, rr, ra };
+      if (gaRec >= 2 && rr - ra >= 0.3) quentes.push(item);
+      else if (gaAnt >= 3 && ra - rr >= 0.3) frios.push(item);
+    });
+    quentes.sort((x, y) => (y.rr - y.ra) - (x.rr - x.ra)); frios.sort((x, y) => (y.ra - y.rr) - (x.ra - x.rr));
+    quentes = quentes.slice(0, 3); frios = frios.slice(0, 3);
+  }
+  return { linhas: linhas.slice(0, 10), totalComGols: linhas.length, quentes, frios, janela };
+}
+
+function tabelaProducao(prod, meses, ultimoMes){
+  if (!prod.linhas.length) return `<p style="color:var(--ink-faint); font-size:13px; margin:8px 0 0;">Ainda não há gols com autor lançado neste ano.</p>`;
+  const max = Math.max(1, ...prod.linhas.flatMap(l => l.cel.map(c => c.g + c.a)));
+  const vis = meses.slice(0, ultimoMes);
+  const cabeca = `<tr><th>Jogador</th>${vis.map(x => `<th class="evo-c">${x.curto}</th>`).join("")}<th class="evo-c">Ano</th></tr>`;
+  const corpo = prod.linhas.map(l => `<tr><td class="evo-nome">${escapeHtml(l.atleta.nome)}</td>${l.cel.map((c, i) => {
+    if (!vis[i].partidas) return `<td class="evo-c"></td>`;
+    const v = c.g + c.a;
+    if (!v) return `<td class="evo-c" style="color:var(--ink-faint);">–</td>`;
+    const alfa = 0.18 + 0.62 * v / max;
+    const tip = `${vis[i].nome}: ${plural(c.g, "gol", "gols")} e ${plural(c.a, "assistência", "assistências")}`;
+    return `<td class="evo-c evo-calor" title="${escapeHtml(tip)}" style="background:rgba(228,182,43,${alfa.toFixed(2)}); color:${alfa > 0.5 ? "#171717" : "var(--ink)"};">${v}</td>`;
+  }).join("")}<td class="evo-c" style="white-space:nowrap;"><strong>${l.g + l.a}</strong> <span style="color:var(--ink-faint); font-size:11px;">${l.g}G ${l.a}A</span></td></tr>`).join("");
+  const nomes = (arr) => arr.map(x => escapeHtml(x.atleta.nome)).join(", ");
+  const tags = (prod.quentes.length || prod.frios.length) ? `<div class="evo-rodape">${prod.quentes.length ? `<strong>Em alta em ${prod.janela}:</strong> ${nomes(prod.quentes)}. ` : ""}${prod.frios.length ? `<strong>Em baixa:</strong> ${nomes(prod.frios)}.` : ""}</div>` : "";
+  return `<div class="table-wrap" style="margin-top:6px;"><table class="evo-tabela"><thead>${cabeca}</thead><tbody>${corpo}</tbody></table></div>
+    <div class="evo-rodape">Cada célula é gols + assistências no mês; mais escuro = mais participação. “–” = jogou o time naquele mês e o jogador não participou de gol.${prod.totalComGols > prod.linhas.length ? ` Mostrando os ${prod.linhas.length} maiores de ${prod.totalComGols}.` : ""}</div>${tags}`;
+}
+
+// ----------------------------------------------------------------------------
+// Resultado por faixa de nota: o time rende mais quando a nota do jogo é alta?
+// ----------------------------------------------------------------------------
+function notaDaUnidade(u){
+  const js = u.jogosOriginais || [u];
+  let soma_ = 0, qtd = 0;
+  js.forEach(j => { const r = mediaNotaJogadoresNoJogo(j); if (r.qtd){ soma_ += r.media * r.qtd; qtd += r.qtd; } });
+  return qtd ? soma_ / qtd : null;
+}
+
+function faixasDeNota(doAnoJogos, porConfronto){
+  const us = (porConfronto ? jogosPorConfronto(doAnoJogos) : doAnoJogos)
+    .map(u => ({ nota: notaDaUnidade(u), r: resultadoJogo(u), nos: u.placarNos, eles: u.placarAdversario }))
+    .filter(x => num(x.nota) && x.r);
+  if (us.length < 6) return { poucos: true, n: us.length };
+  us.sort((a, b) => a.nota - b.nota);
+  const n = us.length, c1 = Math.round(n / 3), c2 = Math.round(2 * n / 3);
+  const nomes = ["Notas mais baixas", "Notas medianas", "Notas mais altas"];
+  const faixas = [us.slice(0, c1), us.slice(c1, c2), us.slice(c2)].map((g, i) => {
+    const v = g.filter(x => x.r === "vitoria").length, e = g.filter(x => x.r === "empate").length, d = g.filter(x => x.r === "derrota").length;
+    return { nome: nomes[i], n: g.length, v, e, d, aprov: (v * 3 + e) / (g.length * 3) * 100,
+      min: g[0].nota, max: g[g.length - 1].nota, gpp: soma(g, x => x.nos || 0) / g.length, gcp: soma(g, x => x.eles || 0) / g.length };
+  });
+  return { poucos: false, n, faixas };
+}
+
+function blocoFaixas(f, un, uns){
+  if (f.poucos) return `<p style="color:var(--ink-faint); font-size:13px; margin:8px 0 0;">Poucos ${uns} com nota neste ano (${f.n}). Com pelo menos 6 ${uns} avaliados dá para comparar as faixas.</p>`;
+  const linhas = f.faixas.map(x => `
+    <div class="evo-faixa">
+      <div class="evo-faixa-topo"><strong>${x.nome}</strong><span>nota ${fmt1(x.min)} a ${fmt1(x.max)} · ${plural(x.n, un, uns)}</span></div>
+      <div class="evo-barra-linha"><div class="evo-barra"><span style="width:${Math.max(2, Math.round(x.aprov))}%"></span></div><b>${Math.round(x.aprov)}%</b></div>
+      <div class="evo-faixa-sub">${x.v}V · ${x.e}E · ${x.d}D · ${fmt1(x.gpp)} gols marcados e ${fmt1(x.gcp)} sofridos por jogo</div>
+    </div>`).join("");
+  return linhas;
+}
+
+function leituraFaixas(f){
+  if (f.poucos) return null;
+  const alta = f.faixas[2], baixa = f.faixas[0], dif = alta.aprov - baixa.aprov;
+  if (dif >= 15) return `<strong>Nota e resultado:</strong> o time rendeu ${pct(alta.aprov)} nos jogos de nota mais alta e ${pct(baixa.aprov)} nos de nota mais baixa — as notas acompanham os resultados. Lembre que a nota é dada depois do jogo e pode refletir o placar.`;
+  if (dif <= -15) return `<strong>Nota e resultado:</strong> curiosamente o aproveitamento foi maior nos jogos de nota mais baixa (${pct(baixa.aprov)}) do que nos de nota mais alta (${pct(alta.aprov)}). Vale olhar se as notas estão sendo dadas com critério parecido em todos os jogos.`;
+  return `<strong>Nota e resultado:</strong> pouca diferença entre as faixas (${pct(baixa.aprov)} nas notas mais baixas e ${pct(alta.aprov)} nas mais altas) — neste ano, a nota do jogo não previu bem o resultado.`;
+}
+
 export function renderEvolucao(root, state){
   wireQuadroChips(root, () => renderEvolucao(root, state));
   const realizados = jogosRealizados(filtrarPorQuadro(state.jogos));
@@ -356,7 +457,29 @@ export function renderEvolucao(root, state){
     leg4 = legenda([[cinza, "Partidas do time"], [ouro, "Jogou"]]);
   }
 
-  const analise = leitura(meses, { atleta, porConfronto, ano: filtroAno, doAnoJogos, ultimoMes });
+  // blocos extras (só no modo "Time todo")
+  let blocosExtras = "", extras = [];
+  if (!atleta){
+    const prod = producaoDeGols(doAnoJogos, jogadores, meses, ultimoMes);
+    const faixas = faixasDeNota(doAnoJogos, porConfronto);
+    const fraseFaixas = leituraFaixas(faixas);
+    if (fraseFaixas) extras.push(fraseFaixas);
+    if (prod.quentes.length) extras.push(`<strong>Esquentando:</strong> ${prod.quentes.map(x => `${escapeHtml(x.atleta.nome)} (${fmt1(x.rr)} gols + assistências por partida em ${prod.janela}, contra ${fmt1(x.ra)} antes)`).join("; ")}.`);
+    if (prod.frios.length) extras.push(`<strong>Esfriando:</strong> ${prod.frios.map(x => `${escapeHtml(x.atleta.nome)} (${fmt1(x.rr)} por partida em ${prod.janela}, contra ${fmt1(x.ra)} antes)`).join("; ")}.`);
+    blocosExtras = `
+      <div class="card card-pad" style="margin-bottom:16px;">
+        <div class="card-title">Quem produz os gols</div>
+        <div class="card-sub">Gols + assistências dos jogadores que mais participaram de gols em ${filtroAno}, mês a mês.</div>
+        ${tabelaProducao(prod, meses, ultimoMes)}
+      </div>
+      <div class="card card-pad" style="margin-bottom:16px;">
+        <div class="card-title">Resultado por faixa de nota</div>
+        <div class="card-sub">Os ${uns} do ano com nota lançada, divididos em três grupos pela nota média do jogo (mais baixas, medianas e mais altas), com o aproveitamento de cada grupo.</div>
+        ${blocoFaixas(faixas, un, uns)}
+        ${faixas.poucos ? "" : `<div class="evo-rodape">Os grupos são relativos ao próprio ano (um terço dos jogos em cada). A nota é dada depois da partida, então pode refletir o resultado em vez de causá-lo.</div>`}
+      </div>`;
+  }
+  const analise = leitura(meses, { atleta, porConfronto, ano: filtroAno, doAnoJogos, ultimoMes, extras });
   const algumPouco = pouco.some(Boolean);
 
   root.innerHTML = topo + `
@@ -367,6 +490,7 @@ export function renderEvolucao(root, state){
       ${cardGrafico(t3, s3, g3, leg3)}
       ${cardGrafico(t4, s4, g4, leg4)}
     </div>
+    ${blocosExtras}
     <div class="card card-pad" style="margin-top:4px;">
       <div class="card-title">O que os gráficos mostram</div>
       <div class="card-sub">Leitura automática de ${filtroAno}${atleta ? ` para ${escapeHtml(atleta.nome)}` : ""}. Meses com poucos jogos oscilam bastante: use como pista, não como sentença.</div>
