@@ -272,6 +272,7 @@ export function renderPremiacoes(root, state){
         <div class="eyebrow">Relatórios</div>
         <h1>Premiações</h1>
       </div>
+      <a href="#relatorios" class="btn btn-ghost btn-sm">&larr; Relatórios</a>
     </div>
     ${quadroChipsHtml(state.jogos)}
     <div class="rank-chips">

@@ -124,6 +124,7 @@ export function renderRetrospecto(root, state){
         <div class="eyebrow">Relatórios</div>
         <h1>Retrospecto</h1>
       </div>
+      <a href="#relatorios" class="btn btn-ghost btn-sm">&larr; Relatórios</a>
     </div>
 
     ${quadroChipsHtml(state.jogos)}

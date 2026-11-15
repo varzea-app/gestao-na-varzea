@@ -34,6 +34,7 @@ export function renderExtrato(root, state, atletaId){
         <div class="eyebrow">Relatórios</div>
         <h1>Extrato do jogador</h1>
       </div>
+      <a href="#relatorios" class="btn btn-ghost btn-sm">&larr; Relatórios</a>
     </div>
     ${quadroChipsHtml(state.jogos)}
     <div class="form-grid" style="max-width:480px; margin-bottom:20px;">

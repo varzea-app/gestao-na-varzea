@@ -120,7 +120,8 @@ export function renderHistorico(root, state, subId){
 
   root.innerHTML = `
     <div class="topbar">
-      <div><div class="eyebrow">Visão geral</div><h1>Histórico</h1></div>
+      <div><div class="eyebrow">Relatórios</div><h1>Histórico</h1></div>
+      <a href="#relatorios" class="btn btn-ghost btn-sm">&larr; Relatórios</a>
     </div>
 
     ${quadroChipsHtml(state.jogos)}
