@@ -4,7 +4,7 @@
 // só então gravar. Linhas com erro nunca são gravadas; as demais entram.
 import { TEAM } from "../tenant.js";
 import { $, $$, escapeHtml, toast, dataISOLocal } from "../utils.js";
-import { importarEmLote, novoIdDoc } from "../db.js";
+import { importarEmLote, novoIdDoc, getPrivateDoc } from "../db.js";
 import { categoriasAtleta, idModalidade, modalidadeAtual } from "../modalidade.js";
 import { GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, idsDaPartida } from "../stats.js";
 import { TIPOS_PARTIDA } from "./jogos.js";
@@ -697,6 +697,82 @@ function lerParticipantes(ws, state, partidasLinhas, jogadoresLinhas){
   return linhas;
 }
 
+// ----------------------------------------------------------------------------
+// Comparação com o que já está cadastrado: para cada linha de algo que já existe,
+// descobre se a planilha realmente muda alguma coisa. Assim a prévia só marca
+// "Atualiza" onde há diferença, e só isso é gravado.
+// ----------------------------------------------------------------------------
+const vazioV = (v) => v === null || v === undefined || v === "";
+function igualValor(a, b){
+  if (vazioV(a) && vazioV(b)) return true;
+  if (vazioV(a) || vazioV(b)) return false;
+  if (typeof a === "string" || typeof b === "string") return String(a).trim() === String(b).trim();
+  return a === b;
+}
+const ROTULO_ATLETA = { nomeCompleto: "nome completo", posicao: "posição", numero: "número", ativo: "ativo", podeVotar: "direito a voto", pagante: "pagante", pagoDesde: "pago desde", observacoes: "observações", telefone: "telefone" };
+const ROTULO_PARTIDA = { horario: "horário", campoId: "campo", tipoPartida: "tipo", status: "status", placarNos: "placar nosso", placarAdversario: "placar adversário", observacoes: "observações" };
+const PADRAO_ATLETA = { ativo: true, podeVotar: false, pagante: false };
+const soDigitos = (v) => String(v || "").replace(/\D/g, "");
+
+function assinaturaGol(e){
+  return [e.atletaGolId || "", e.atletaAssistId || "", e.minuto ?? "", e.tipoGol || "", e.tempo || ""].join("|");
+}
+
+async function marcarMudancas(state, { jogadores, partidas, gols, participantes }){
+  // Jogadores: campos preenchidos que diferem do cadastro + telefone (dado privado, lido à parte)
+  await Promise.all(jogadores.map(async (L) => {
+    if (!L.existenteId) return;
+    const ex = state.atletas.find(a => a.id === L.existenteId) || {};
+    L.mudancas = {};
+    Object.entries(L.parcial).forEach(([k, v]) => {
+      const atual = ex[k] === undefined && k in PADRAO_ATLETA ? PADRAO_ATLETA[k] : ex[k];
+      if (!igualValor(atual, v)) L.mudancas[k] = v;
+    });
+    const campos = Object.keys(L.mudancas).map(k => ROTULO_ATLETA[k] || k);
+    L.telMudou = false;
+    if (L.telefone){
+      let atualTel = null;
+      try{ atualTel = (await getPrivateDoc("atletas_privado", L.existenteId)).telefone || ""; }
+      catch(_){ atualTel = null; }   // não conseguiu ler: considera que muda
+      L.telMudou = atualTel === null || soDigitos(atualTel) !== soDigitos(L.telefone);
+      if (L.telMudou) campos.push(ROTULO_ATLETA.telefone);
+    }
+    L.mudou = campos.length > 0;
+    L.detalhe = L.mudou ? `muda: ${campos.join(", ")}` : "já cadastrado, sem diferenças";
+  }));
+
+  // Partidas
+  partidas.forEach(L => {
+    if (!L.existenteId) return;
+    const ex = state.jogos.find(j => j.id === L.existenteId) || {};
+    L.mudancas = {};
+    Object.entries(L.parcial).forEach(([k, v]) => { if (!igualValor(ex[k], v)) L.mudancas[k] = v; });
+    const campos = Object.keys(L.mudancas).map(k => ROTULO_PARTIDA[k] || k);
+    L.mudou = campos.length > 0;
+    L.detalhe = L.mudou ? `muda: ${campos.join(", ")}` : "já cadastrada, sem diferenças";
+  });
+
+  // Gols: compara a lista da planilha (por partida) com a que já está na partida
+  const grupos = new Map();
+  gols.forEach(L => { if (L.existenteId && !L.erros.length) (grupos.get(L.alvoId) || grupos.set(L.alvoId, []).get(L.alvoId)).push(L); });
+  grupos.forEach((linhas, id) => {
+    const ex = state.jogos.find(j => j.id === id);
+    const atual = (ex?.golsAssistencias || []).map(assinaturaGol).sort().join("\n");
+    const novo = linhas.map(l => assinaturaGol(l.evento)).sort().join("\n");
+    const mudou = atual !== novo;
+    linhas.forEach(l => {
+      l.mudou = mudou;
+      l.detalhe = mudou ? "a lista de gols desta partida será substituída" : "a partida já tem exatamente esses gols";
+    });
+  });
+
+  // Participantes que já estão na partida: não há o que mudar
+  participantes.forEach(L => { if (L.existenteId){ L.mudou = false; L.detalhe = "já está na partida"; } });
+}
+
+// Linha que será gravada: sem erro e (nova, ou já existente com diferença e "Atualizar" marcado)
+const vaiGravar = (l, atualiza) => !l.erros.length && (!l.existenteId || (atualiza && !!l.mudou));
+
 async function lerArquivo(arquivo, state){
   const ExcelJS = await carregarExcelJS();
   const wb = new ExcelJS.Workbook();
@@ -712,7 +788,9 @@ async function lerArquivo(arquivo, state){
   if (!wj && !wp && !wg && !wq) throw new Error("O arquivo não tem as abas \"Jogadores\", \"Partidas\", \"Gols\" ou \"Participantes\". Use o modelo baixado nesta tela.");
   const jogadores = lerJogadores(wj, state);
   const partidas = lerPartidas(wp, state);
-  return { jogadores, partidas, gols: lerGols(wg, state, partidas, jogadores), participantes: lerParticipantes(wq, state, partidas, jogadores) };
+  const resultado = { jogadores, partidas, gols: lerGols(wg, state, partidas, jogadores), participantes: lerParticipantes(wq, state, partidas, jogadores) };
+  await marcarMudancas(state, resultado);
+  return resultado;
 }
 
 // ----------------------------------------------------------------------------
@@ -783,11 +861,14 @@ async function executar(btn, fn){
 }
 
 function contar(linhas, atualiza){
+  const unicos = (ls) => ls[0]?.tipo === "gol" ? new Set(ls.map(l => l.alvoId)).size : ls.length;
   const ok = linhas.filter(l => !l.erros.length);
   return {
     novos: ok.filter(l => !l.existenteId).length,
-    existentes: ok.filter(l => l.existenteId).length,
-    aGravar: ok.filter(l => !l.existenteId || atualiza).length,
+    // gols: conta partidas (várias linhas de gol pertencem à mesma partida); demais abas: linhas
+    existentes: unicos(ok.filter(l => l.existenteId)),
+    comMudanca: unicos(ok.filter(l => l.existenteId && l.mudou)),
+    aGravar: ok.filter(l => vaiGravar(l, atualiza)).length,
     erros: linhas.filter(l => l.erros.length).length,
   };
 }
@@ -799,16 +880,17 @@ function desenharPrevia(root, state){
   const cj = contar(jogadores, atualizarExistentes), cp = contar(partidas, atualizarExistentes);
   const cg = contar(gols, atualizarExistentes), cq = contar(participantes, atualizarExistentes);
   const totalGravar = cj.aGravar + cp.aGravar + cg.aGravar + cq.aGravar;
-  const novosAdv = [...new Set(partidas.filter(l => !l.erros.length && l.novoAdversario && (!l.existenteId || atualizarExistentes)).map(l => norm(l.novoAdversario)))];
-  const novosCampos = [...new Set(partidas.filter(l => !l.erros.length && l.novoCampo && (!l.existenteId || atualizarExistentes)).map(l => norm(l.novoCampo)))];
+  const novosAdv = [...new Set(partidas.filter(l => l.novoAdversario && vaiGravar(l, atualizarExistentes)).map(l => norm(l.novoAdversario)))];
+  const novosCampos = [...new Set(partidas.filter(l => l.novoCampo && vaiGravar(l, atualizarExistentes)).map(l => norm(l.novoCampo)))];
   const nomeBonito = (lista, chave, campo) => lista.find(l => norm(l[campo]) === chave)?.[campo] || chave;
 
   const linhaHtml = (l, aba) => {
     let etiqueta, cls;
     if (l.erros.length){ etiqueta = "Erro"; cls = "badge-off"; }
-    else if (l.existenteId){ etiqueta = atualizarExistentes ? "Atualiza" : "Já existe — ignorada"; cls = atualizarExistentes ? "badge-pending" : "badge-off"; }
+    else if (l.existenteId && !l.mudou){ etiqueta = "Sem mudança"; cls = "badge-off"; }
+    else if (l.existenteId){ etiqueta = atualizarExistentes ? "Atualiza" : "Mudou — ignorada"; cls = atualizarExistentes ? "badge-pending" : "badge-off"; }
     else { etiqueta = "Novo"; cls = "badge-ok"; }
-    const msgs = [...l.erros, ...(l.avisos || []), ...(l.existenteId && !l.erros.length && l.detalhe ? [l.detalhe] : []), ...(l.telefone && !l.erros.length ? ["com telefone"] : []), ...(l.novoAdversario && !l.erros.length ? [`adversário novo: ${l.novoAdversario}`] : []), ...(l.novoCampo && !l.erros.length ? [`campo novo: ${l.novoCampo}`] : [])];
+    const msgs = [...l.erros, ...(l.avisos || []), ...(l.existenteId && !l.erros.length && l.detalhe ? [l.detalhe] : []), ...(l.telefone && !l.erros.length && !l.existenteId ? ["com telefone"] : []), ...(l.novoAdversario && !l.erros.length ? [`adversário novo: ${l.novoAdversario}`] : []), ...(l.novoCampo && !l.erros.length ? [`campo novo: ${l.novoCampo}`] : [])];
     return `<tr>
       <td>${aba}</td><td>${l.linha}</td><td><strong>${escapeHtml(l.resumo || "")}</strong></td>
       <td><span class="badge ${cls}">${etiqueta}</span></td>
@@ -824,16 +906,16 @@ function desenharPrevia(root, state){
       <div class="manchete-eyebrow">${escapeHtml(nomeArquivo)}</div>
       <div class="manchete-titulo">${totalGravar} registro${totalGravar === 1 ? "" : "s"} pronto${totalGravar === 1 ? "" : "s"} para importar</div>
       <div class="manchete-sub">
-        Jogadores: ${cj.novos} novo${cj.novos === 1 ? "" : "s"}, ${cj.existentes} já existe${cj.existentes === 1 ? "" : "m"}, ${cj.erros} com erro ·
-        Partidas: ${cp.novos} nova${cp.novos === 1 ? "" : "s"}, ${cp.existentes} já existe${cp.existentes === 1 ? "" : "m"}, ${cp.erros} com erro
-        ${gols.length ? `<br>Gols: ${cg.novos} novo${cg.novos === 1 ? "" : "s"}, ${cg.existentes} de partida${cg.existentes === 1 ? "" : "s"} que já ${cg.existentes === 1 ? "tem" : "têm"} gols, ${cg.erros} com erro` : ""}
+        Jogadores: ${cj.novos} novo${cj.novos === 1 ? "" : "s"}, ${cj.existentes} já existe${cj.existentes === 1 ? "" : "m"}${cj.existentes ? ` (${cj.comMudanca} com mudança)` : ""}, ${cj.erros} com erro ·
+        Partidas: ${cp.novos} nova${cp.novos === 1 ? "" : "s"}, ${cp.existentes} já existe${cp.existentes === 1 ? "" : "m"}${cp.existentes ? ` (${cp.comMudanca} com mudança)` : ""}, ${cp.erros} com erro
+        ${gols.length ? `<br>Gols: ${cg.novos} novo${cg.novos === 1 ? "" : "s"}, ${cg.existentes} de partida${cg.existentes === 1 ? "" : "s"} que já ${cg.existentes === 1 ? "tem" : "têm"} gols${cg.existentes ? ` (${cg.comMudanca} com lista diferente)` : ""}, ${cg.erros} com erro` : ""}
         ${participantes.length ? `<br>Participantes: ${cq.novos} novo${cq.novos === 1 ? "" : "s"}, ${cq.existentes} já ${cq.existentes === 1 ? "está" : "estão"} na partida, ${cq.erros} com erro` : ""}
         ${novosAdv.length || novosCampos.length ? `<br>Serão cadastrados também: ${novosAdv.length} adversário${novosAdv.length === 1 ? "" : "s"} (${escapeHtml(novosAdv.map(c => nomeBonito(partidas, c, "novoAdversario")).join(", ") || "—")}) e ${novosCampos.length} campo${novosCampos.length === 1 ? "" : "s"} (${escapeHtml(novosCampos.map(c => nomeBonito(partidas, c, "novoCampo")).join(", ") || "—")}).` : ""}
       </div>
     </div>
-    ${(() => { const n = jogadores.filter(l => !l.erros.length && l.existenteId && l.telefone).length; return n && !atualizarExistentes ? `<div class="landing-aviso" style="margin-bottom:12px;">${n} telefone${n === 1 ? "" : "s"} de jogador${n === 1 ? "" : "es"} já cadastrado${n === 1 ? "" : "s"} <strong>${n === 1 ? "não será gravado" : "não serão gravados"}</strong>. Marque "Atualizar também os que já existem" abaixo para gravar.</div>` : ""; })()}
+    ${(() => { const n = jogadores.filter(l => !l.erros.length && l.existenteId && l.telMudou).length; return n && !atualizarExistentes ? `<div class="landing-aviso" style="margin-bottom:12px;">${n} telefone${n === 1 ? "" : "s"} de jogador${n === 1 ? "" : "es"} já cadastrado${n === 1 ? "" : "s"} ${n === 1 ? "é diferente do que está no app e" : "são diferentes do que está no app e"} <strong>${n === 1 ? "não será gravado" : "não serão gravados"}</strong>. Marque "Atualizar também os que já existem" abaixo para gravar.</div>` : ""; })()}
     ${cj.erros + cp.erros + cg.erros + cq.erros ? `<div class="landing-aviso" style="margin-bottom:12px;">As linhas com erro <strong>não serão importadas</strong>. Corrija no Excel e envie de novo, ou importe só as que estão certas.</div>` : ""}
-    ${cj.existentes + cp.existentes + cg.existentes + cq.existentes ? `<label style="display:flex; align-items:center; gap:8px; font-size:13.5px; margin-bottom:12px;"><input type="checkbox" id="imp-atualizar" ${atualizarExistentes ? "checked" : ""} style="width:16px;height:16px;"> Atualizar também os que já existem (só os campos preenchidos; nos gols, a lista da partida é substituída pela da planilha)</label>` : ""}
+    ${cj.comMudanca + cp.comMudanca + cg.comMudanca ? `<label style="display:flex; align-items:center; gap:8px; font-size:13.5px; margin-bottom:12px;"><input type="checkbox" id="imp-atualizar" ${atualizarExistentes ? "checked" : ""} style="width:16px;height:16px;"> Atualizar também os que já existem e mudaram (só os campos que diferem; nos gols, a lista da partida é substituída pela da planilha)</label>` : ""}
     <div class="table-wrap" style="max-height:340px; overflow:auto;">
       <table><thead><tr><th>Aba</th><th>Linha</th><th>Registro</th><th>Resultado</th><th>Detalhe</th></tr></thead>
       <tbody>${ordenadas.join("") || `<tr><td colspan="5">Nenhuma linha preenchida foi encontrada.</td></tr>`}</tbody></table>
@@ -851,7 +933,7 @@ function desenharPrevia(root, state){
 async function gravar(root, state){
   if (gravando || !previa) return;
   const atualiza = atualizarExistentes;
-  const ok = (l) => !l.erros.length && (!l.existenteId || atualiza);
+  const ok = (l) => vaiGravar(l, atualiza);
   const jog = previa.jogadores.filter(ok);
   const par = previa.partidas.filter(ok);
   const gol = previa.gols.filter(l => ok(l) && l.alvoId);
@@ -875,10 +957,10 @@ async function gravar(root, state){
       }
     });
     jog.forEach(l => {
-      if (l.existenteId){ if (Object.keys(l.parcial).length) itens.push({ colecao: "atletas", id: l.existenteId, existente: true, dados: l.parcial }); }
+      if (l.existenteId){ if (Object.keys(l.mudancas || {}).length) itens.push({ colecao: "atletas", id: l.existenteId, existente: true, dados: l.mudancas }); }
       else itens.push({ colecao: "atletas", id: l.novoId, existente: false, dados: l.dados });
       // telefone: dado privado, em documento à parte (mesmo id do atleta). Só quem tem telefone preenchido.
-      if (l.telefone) itens.push({ colecao: "atletas_privado", id: l.existenteId || l.novoId, mesclar: true, dados: { telefone: l.telefone } });
+      if (l.telefone && (!l.existenteId || l.telMudou)) itens.push({ colecao: "atletas_privado", id: l.existenteId || l.novoId, mesclar: true, dados: { telefone: l.telefone } });
     });
 
     // gols e participantes agrupados por partida (id da partida -> { gols, rel })
@@ -894,7 +976,7 @@ async function gravar(root, state){
 
     const atualizacoes = new Map();   // partidas já existentes: id -> campos a atualizar
     par.forEach(l => {
-      if (l.existenteId){ atualizacoes.set(l.existenteId, { ...l.parcial }); return; }
+      if (l.existenteId){ atualizacoes.set(l.existenteId, { ...(l.mudancas || {}) }); return; }
       const dados = { ...l.dados };
       if (!dados.adversarioId) dados.adversarioId = novosAdv[norm(l.novoAdversario)];
       if (!dados.campoId) dados.campoId = novosCampos[norm(l.novoCampo)];
@@ -921,7 +1003,7 @@ async function gravar(root, state){
     await importarEmLote(itens);
     const txt = (n, s, p) => `${n} ${n === 1 ? s : p}`;
     const resumo = [txt(jog.length, "jogador", "jogadores"), txt(par.length, "partida", "partidas")];
-    const nTel = jog.filter(l => l.telefone).length;
+    const nTel = jog.filter(l => l.telefone && (!l.existenteId || l.telMudou)).length;
     if (nTel) resumo.push(txt(nTel, "telefone", "telefones"));
     if (gol.length) resumo.push(txt(gol.length, "gol", "gols"));
     if (part.length) resumo.push(txt(part.length, "participante", "participantes"));
