@@ -19,6 +19,7 @@ import { renderRelatoriosHub } from "./views/relatorios.js";
 import { renderExtrato } from "./views/extrato.js";
 import { renderPresenca } from "./views/presenca.js";
 import { renderRetrospecto } from "./views/retrospecto.js";
+import { renderEvolucao } from "./views/evolucao.js";
 import { renderPremiacoes } from "./views/premiacoes.js";
 import { renderConfiguracoes } from "./views/configuracoes.js";
 import { renderAdmin } from "./views/admin.js";
@@ -64,6 +65,7 @@ const ROUTES = {
   financeiro: renderFinanceiro,
   relatorios: renderRelatoriosHub,
   retrospecto: renderRetrospecto,
+  evolucao: renderEvolucao,
   premiacoes: renderPremiacoes,
   configuracoes: renderConfiguracoes,
 };
@@ -280,7 +282,7 @@ function parseHash(){
 function atualizarMenu(route){
   // Hubs: o botão do menu fica ativo em qualquer subtela do hub.
   const CADASTROS_SUBROTAS = new Set(["atletas", "adversarios", "campos", "jogos", "importar"]);
-  const RELATORIOS_SUBROTAS = new Set(["ranking", "escalacao-ideal", "historico", "extrato", "retrospecto", "premiacoes"]);
+  const RELATORIOS_SUBROTAS = new Set(["ranking", "escalacao-ideal", "historico", "extrato", "retrospecto", "evolucao", "premiacoes"]);
   const ativa = CADASTROS_SUBROTAS.has(route) ? "cadastros" : RELATORIOS_SUBROTAS.has(route) ? "relatorios" : route;
   $$(".nav-link[data-route]").forEach(a => a.classList.toggle("active", a.dataset.route === ativa));
 

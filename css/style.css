@@ -855,3 +855,12 @@ body.sem-time main#view-root{margin-left:0; padding:28px 18px 60px; max-width:76
 .hist-quadros{ font-size:.68rem; opacity:.65; margin-top:1px; }
 .hist-quadro{ cursor:pointer; }
 .hist-quadro:hover{ text-decoration:underline; }
+
+/* Evolução do ano (gráficos mês a mês) */
+.evo-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:16px; margin-bottom:16px;}
+.evo-card svg{margin-top:6px; max-width:100%;}
+.evo-leg{display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; font-size:12.5px; color:var(--ink-soft);}
+.evo-leg i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px;}
+.evo-rodape{margin-top:6px; font-size:12px; color:var(--ink-faint);}
+.evo-leitura{margin:0; padding-left:18px; display:flex; flex-direction:column; gap:10px; font-size:14px; line-height:1.5;}
+@media (max-width:520px){ .evo-grid{grid-template-columns:1fr;} }

@@ -13,6 +13,7 @@ const ICONES = {
   extrato: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/></svg>`,
   retrospecto: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>`,
   "escalacao-ideal": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="6" r="2.4"/><circle cx="5" cy="14" r="2.4"/><circle cx="19" cy="14" r="2.4"/><circle cx="9" cy="20" r="2.4"/><circle cx="15" cy="20" r="2.4"/></svg>`,
+  evolucao: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>`,
   historico: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>`,
 };
 
@@ -90,6 +91,7 @@ export function renderRelatoriosHub(root, state){
     ]},
     { titulo: "Como o time joga", itens: [
       { route: "retrospecto", label: "Retrospecto", desc: fraseRetro },
+      { route: "evolucao", label: "Evolução do ano", desc: "Mês a mês: aproveitamento, notas e gols" },
       { route: "escalacao-ideal", label: "Escalação ideal", desc: "O melhor time possível, por formação" },
     ]},
     { titulo: "Memória do time", itens: [

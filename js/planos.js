@@ -22,6 +22,7 @@ const RECURSOS_CRAQUE = [
   "financeiro",         // mensalidades e caixa do time
   "escalacao-ideal",    // melhor time por formação, calculado pelas notas
   "retrospecto",        // campanha contra cada adversário e campo
+  "evolucao",           // evolução mês a mês: aproveitamento, notas e gols
   "premiacoes",         // destaque do mês / da temporada
   "avaliacao-campo",    // aba "Campo & adversário" da partida
 ];
@@ -44,6 +45,7 @@ export const NOMES_RECURSOS = {
   financeiro: "Financeiro",
   "escalacao-ideal": "Escalação ideal",
   retrospecto: "Retrospecto",
+  evolucao: "Evolução do ano",
   premiacoes: "Premiações",
   "avaliacao-campo": "Avaliação de campo e adversário",
 };
@@ -56,6 +58,7 @@ export const RECURSO_DA_ROTA = {
   presenca: "presenca",
   "escalacao-ideal": "escalacao-ideal",
   retrospecto: "retrospecto",
+  evolucao: "evolucao",
   premiacoes: "premiacoes",
 };
 
