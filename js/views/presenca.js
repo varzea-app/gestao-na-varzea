@@ -106,6 +106,7 @@ function desenhar(root, state, jogoId){
     </a>
     <div class="topbar">
       <div>
+        ${state.isAuthorized ? `<a href="#jogos/${jogoId}" class="btn btn-ghost btn-sm" id="btn-voltar-partida" style="margin-bottom:8px;">&larr; Voltar para a partida</a>` : ""}
         <div class="eyebrow">Confirmação de presença</div>
         <h1>${TEAM.nomeHtml} vs ${escapeHtml(adv)}</h1>
         <div style="font-size:13px; color:var(--ink-soft); margin-top:4px;">🗓️ ${formatDateLong(jogo.data)}${jogo.horario ? ` · ⏰ ${escapeHtml(jogo.horario)}` : ""}${campo ? ` · 📍 ${escapeHtml(campo)}` : ""}${jogo.tipoPartida ? ` · 🏷️ ${escapeHtml(jogo.tipoPartida)}` : ""}</div>
