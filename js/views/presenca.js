@@ -1,6 +1,6 @@
 import { TEAM, hashtags, linkDoTime } from "../tenant.js";
 import { $, $$, escapeHtml, toast, formatDateLong } from "../utils.js";
-import { listenPresencas, setPresenca } from "../db.js";
+import { listenPresencas, setPresenca, removeDoc } from "../db.js";
 import { ehJogador } from "../stats.js";
 import { temRecurso } from "../planos.js";
 import { abrirImagemConfirmados } from "./imagem-confirmados.js";
@@ -91,7 +91,7 @@ function desenhar(root, state, jogoId){
       <div class="card card-pad" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
         <div>
           <strong>${escapeHtml(a.nome)}</strong>
-          ${quando(a.id) ? `<div style="font-size:11.5px; color:var(--ink-faint);">${quando(a.id)}</div>` : ""}
+          ${quando(a.id) || (state.isAuthorized && atual) ? `<div style="font-size:11.5px; color:var(--ink-faint);">${quando(a.id)}${state.isAuthorized && atual ? `${quando(a.id) ? " · " : ""}<a href="#" data-limpar="${a.id}" style="color:var(--danger); font-weight:600;">Limpar resposta</a>` : ""}</div>` : ""}
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">${botoes}</div>
       </div>`;
@@ -144,6 +144,20 @@ function desenhar(root, state, jogoId){
       console.error(err);
       toast(err.code === "plano-vencido" ? "As confirmações deste time estão pausadas. Avise o responsável pelo time." : "Não foi possível salvar sua resposta. Tente de novo.", "err");
       btn.disabled = false;
+    }
+  }));
+
+  // Só quem está logado na equipe pode apagar a resposta de um jogador.
+  $$("[data-limpar]", root).forEach(a => a.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const atletaId = a.dataset.limpar;
+    const nome = jogadores.find(x => x.id === atletaId)?.nome || "";
+    try{
+      await removeDoc("presencas", `${jogoId}_${atletaId}`);
+      toast(`Resposta de ${nome} apagada.`, "ok");
+    }catch(err){
+      console.error(err);
+      toast("Não foi possível limpar a resposta. Confira se você está logado na equipe.", "err");
     }
   }));
 
