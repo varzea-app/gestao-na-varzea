@@ -3,7 +3,7 @@ import { temRecurso } from "../planos.js";
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatDate, formatDateLong, todayISO, fmt1, ratingWidgetHtml, wireRatingWidgets, reRenderKeepingFocus } from "../utils.js";
 import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas, setPresenca } from "../db.js";
 import { fieldHtml, collectFormData } from "./cadastros.js";
-import { posicoesDaModalidade, idModalidade } from "../modalidade.js";
+import { posicoesDaModalidade, idModalidade, ordemPosicao, pluralPosicao } from "../modalidade.js";
 import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, agruparConfrontos, rotuloQuadro, idsDaPartida, ordemCronologica, divergenciaPlacar, textoDivergenciaPlacar } from "../stats.js";
 
 import { linkPresenca } from "./presenca.js";
@@ -615,6 +615,22 @@ export function renderJogoDetail(root, state, jogoId){
 
 const ROTULO_RESP = { vou: "confirmou", talvez: "talvez", nao: "não vou" };
 
+// Agrupa os atletas pela posição do cadastro (Goleiros, Zagueiros, Laterais…), na ordem
+// do campo; dentro de cada grupo, por nome. Sem posição fica por último.
+function porPosicao(lista){
+  const grupos = new Map();
+  [...lista].sort((a, b) => ordemPosicao(a.posicao) - ordemPosicao(b.posicao) || (a.posicao || "").localeCompare(b.posicao || "") || (a.nome || "").localeCompare(b.nome || "", "pt-BR"))
+    .forEach(a => {
+      const k = a.posicao || "";
+      if (!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(a);
+    });
+  return [...grupos].map(([pos, atletas]) => {
+    const t = pos ? pluralPosicao(pos) : "sem posição";
+    return { titulo: t.charAt(0).toUpperCase() + t.slice(1), atletas };
+  });
+}
+
 function renderEscalacaoPanel(jogo, atletas, field, presencas){
   const escalacao = normalizeEscalacao(jogo[field]);
   const posicaoPorId = Object.fromEntries(escalacao.map(e => [e.atletaId, e.posicao]));
@@ -622,7 +638,7 @@ function renderEscalacaoPanel(jogo, atletas, field, presencas){
   // Mantém na lista qualquer atleta já escalado neste jogo, mesmo que hoje esteja marcado como inativo —
   // assim uma partida antiga não perde jogadores que saíram do elenco depois. Técnicos não entram
   // na escalação (não jogam em campo).
-  const disponiveis = atletas.filter(a => ehJogador(a) && (a.ativo !== false || selecionados.has(a.id)));
+  const disponiveis = porPosicao(atletas.filter(a => ehJogador(a) && (a.ativo !== false || selecionados.has(a.id)))).flatMap(g => g.atletas);
   if (disponiveis.length === 0){
     return `<div class="empty-state"><p>Cadastre atletas ativos para montar a escalação.</p></div>`;
   }
@@ -687,7 +703,7 @@ function renderEscalacaoPanel(jogo, atletas, field, presencas){
       <div class="card-sub">${sub}</div>
       ${atalho ? `<div style="margin:0 0 12px;">${atalho}</div>` : ""}
       <div class="player-grid player-grid-escalacao">
-        ${disponiveis.map(chip).join("")}
+        ${porPosicao(disponiveis).map(g => `<div class="player-grupo" data-grupo ${g.atletas.some(visivel) ? "" : "hidden"}>${escapeHtml(g.titulo)}</div>${g.atletas.map(chip).join("")}`).join("")}
       </div>
       ${extras}
       <div class="form-actions"><button class="btn btn-primary" data-save-escalacao="${field}">Salvar</button></div>
@@ -717,12 +733,20 @@ function wireEscalacaoPanel(root, jogo, field, panelSel, presencas){
     });
     cb.addEventListener("change", sync);
   });
+  // Título de cada posição só aparece se tiver algum jogador visível no grupo.
+  const atualizarGrupos = () => {
+    $$(".player-grupo", panel).forEach(g => {
+      let el = g.nextElementSibling, algum = false;
+      while (el && !el.classList.contains("player-grupo")){ if (!el.hidden) algum = true; el = el.nextElementSibling; }
+      g.hidden = !algum;
+    });
+  };
   // Marca/desmarca um jogador da lista (mostrando o chip se estiver escondido).
   const marcar = (id, ligado, posicao) => {
     const chip = panel.querySelector(`.player-chip[data-chip="${id}"]`);
     if (!chip) return;
     const cb = chip.querySelector('input[type="checkbox"]');
-    if (ligado) chip.hidden = false;
+    if (ligado){ chip.hidden = false; atualizarGrupos(); }
     cb.checked = ligado;
     const sel = chip.querySelector("select");
     if (ligado && sel && posicao) sel.value = posicao;
@@ -750,6 +774,7 @@ function wireEscalacaoPanel(root, jogo, field, panelSel, presencas){
     const chip = panel.querySelector(`.player-chip[data-chip="${id}"]`);
     if (chip){
       chip.hidden = false;
+      atualizarGrupos();
       const cb = chip.querySelector('input[type="checkbox"]');
       cb.checked = true;
       cb.dispatchEvent(new Event("change"));
