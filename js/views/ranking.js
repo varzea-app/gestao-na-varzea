@@ -207,6 +207,8 @@ export function renderRanking(root, state){
       </div>
     </div>
 
+    ${activeMetric === "nota" ? `<p class="rank-nota-info">Média das notas recebidas, equilibrada com a média do time: quem jogou menos partidas fica mais perto da média geral.</p>` : ""}
+
     ${votantes.length > 0 ? `
       <div style="margin-bottom:20px;">
         <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">
