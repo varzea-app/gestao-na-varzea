@@ -158,14 +158,16 @@ export function jogosPorConfronto(realizados){
 export function statsPorAtleta(atletas, jogos, votanteIds = null){
   const gaMap = golsEAssistenciasPorAtleta(jogos);
   const jogosMap = contagemJogosPorAtleta(jogos);
+  const mt = mediaDoTime(jogos, votanteIds);
   return atletas.map(a => {
-    const { media, qtd } = mediaNotaAtleta(a.id, jogos, votanteIds);
+    const { media, mediaBruta, qtd } = mediaNotaAtleta(a.id, jogos, votanteIds, mt);
     return {
       atleta: a,
       jogosCount: jogosMap[a.id] || 0,
       gols: gaMap[a.id]?.gols || 0,
       assistencias: gaMap[a.id]?.assistencias || 0,
-      media,
+      media,          // nota ajustada (é a que aparece e ordena os rankings)
+      mediaBruta,     // média simples (só para a evolução mês a mês)
       qtdAvaliacoes: qtd,
     };
   });
@@ -243,10 +245,42 @@ export function mediaNotaJogadoresNoJogo(jogo){
   return { media: avg(todas), qtd: todas.length };
 }
 
-export function mediaNotaAtleta(atletaId, jogos, votanteIds = null){
+// ----------------------------------------------------------------------------
+// Nota média ajustada: quanto menos jogos avaliados, mais a nota do jogador é
+// "puxada" para a média do time (o peso é como se todo jogador começasse com
+// PESO_AJUSTE_NOTA jogos na média do time). Com muitos jogos, a nota ajustada fica
+// praticamente igual à média real. É a nota usada em todos os rankings e telas.
+//   ajustada = (jogos × média do jogador + PESO × média do time) ÷ (jogos + PESO)
+// "jogos" = partidas em que ele recebeu nota (não a quantidade de votos).
+// ----------------------------------------------------------------------------
+export const PESO_AJUSTE_NOTA = 3;
+export function ajustarNota(media, jogosComNota, mediaTime){
+  if (media === null || media === undefined) return null;
+  if (mediaTime === null || mediaTime === undefined || !jogosComNota) return media;
+  return (jogosComNota * media + PESO_AJUSTE_NOTA * mediaTime) / (jogosComNota + PESO_AJUSTE_NOTA);
+}
+// Média de todas as notas do time no conjunto de jogos (campeonato fora), com o mesmo
+// filtro de votantes usado na nota do jogador.
+export function mediaDoTime(jogos, votanteIds = null){
+  const todas = [];
+  jogosRealizados(jogos).filter(contaParaNota).forEach(j => {
+    Object.keys(j.avaliacoesJogadores || {}).forEach(id => todas.push(...notasDoAtletaNoJogo(j, id, votanteIds)));
+  });
+  return avg(todas);
+}
+
+// media = nota ajustada (a que aparece nas telas); mediaBruta = média simples das notas;
+// qtd = quantidade de votos; jogos = partidas em que recebeu nota.
+export function mediaNotaAtleta(atletaId, jogos, votanteIds = null, mediaTimePre = undefined){
   const notas = [];
-  jogosRealizados(jogos).filter(contaParaNota).forEach(j => notas.push(...notasDoAtletaNoJogo(j, atletaId, votanteIds)));
-  return { media: avg(notas), qtd: notas.length };
+  let jogosComNota = 0;
+  jogosRealizados(jogos).filter(contaParaNota).forEach(j => {
+    const n = notasDoAtletaNoJogo(j, atletaId, votanteIds);
+    if (n.length){ notas.push(...n); jogosComNota++; }
+  });
+  const bruta = avg(notas);
+  const mt = mediaTimePre === undefined ? mediaDoTime(jogos, votanteIds) : mediaTimePre;
+  return { media: ajustarNota(bruta, jogosComNota, mt), mediaBruta: bruta, qtd: notas.length, jogos: jogosComNota };
 }
 
 // Notas médias de cada atleta separadas pela posição que ele efetivamente
@@ -265,15 +299,18 @@ export function notasPorPosicao(atletas, jogos, mapearPosicao = null){
       if (posicao && mapearPosicao) posicao = mapearPosicao(posicao); // ex.: partida antiga de campo, time hoje de futsal
       if (!posicao) return;
       if (!map[atletaId]) map[atletaId] = {};
-      if (!map[atletaId][posicao]) map[atletaId][posicao] = [];
-      map[atletaId][posicao].push(...notas);
+      if (!map[atletaId][posicao]) map[atletaId][posicao] = { notas: [], jogos: 0 };
+      map[atletaId][posicao].notas.push(...notas);
+      map[atletaId][posicao].jogos++;
     });
   });
+  const mt = mediaDoTime(jogos);
   const result = {};
   Object.entries(map).forEach(([atletaId, porPosicao]) => {
     result[atletaId] = {};
-    Object.entries(porPosicao).forEach(([posicao, notas]) => {
-      result[atletaId][posicao] = { media: avg(notas), qtd: notas.length };
+    Object.entries(porPosicao).forEach(([posicao, { notas, jogos: nJogos }]) => {
+      // Mesma regra da nota ajustada: poucos jogos naquela posição puxam para a média do time.
+      result[atletaId][posicao] = { media: ajustarNota(avg(notas), nJogos, mt), qtd: notas.length, jogos: nJogos };
     });
   });
   return result;

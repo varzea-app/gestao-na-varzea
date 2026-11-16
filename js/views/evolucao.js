@@ -47,7 +47,7 @@ function calcularMeses(realizadosAno, atleta, porConfronto){
       nPlacar: comPlacar.length, golsPro, golsContra,
       gpp: comPlacar.length ? golsPro / comPlacar.length : null,
       gcp: comPlacar.length ? golsContra / comPlacar.length : null,
-      nota: atleta ? (st.media ?? null) : (mediaGeralJogadores(doMes) ?? null),
+      nota: atleta ? (st.mediaBruta ?? null) : (mediaGeralJogadores(doMes) ?? null),
       gols: st ? st.gols : 0, assist: st ? st.assistencias : 0,
       jogou: jogosAtleta.length,
     });
