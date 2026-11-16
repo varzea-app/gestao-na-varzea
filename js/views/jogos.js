@@ -4,7 +4,7 @@ import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, formatD
 import { createDoc, saveDoc, removeDoc, updateJogoField, listenPresencas, setPresenca } from "../db.js";
 import { fieldHtml, collectFormData } from "./cadastros.js";
 import { posicoesDaModalidade, idModalidade } from "../modalidade.js";
-import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, agruparConfrontos, rotuloQuadro, idsDaPartida, ordemCronologica } from "../stats.js";
+import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA_ID, TIPOS_GOL, TEMPOS_JOGO, jogadoresDaPartida, agruparConfrontos, rotuloQuadro, idsDaPartida, ordemCronologica, divergenciaPlacar, textoDivergenciaPlacar } from "../stats.js";
 
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
@@ -405,6 +405,8 @@ export function renderJogoDetail(root, state, jogoId){
     (jogo.golsAssistencias || []).forEach(e => { if (e.atletaGolId && e.atletaGolId !== GOL_CONTRA_ID) cont[e.atletaGolId] = (cont[e.atletaGolId] || 0) + 1; });
     const lista = Object.entries(cont).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${state.atletas.find(x => x.id === id)?.nome || "?"}${n > 1 ? ` (${n})` : ""}`);
     if (lista.length) faixaJogo = `<div class="jogo-faixa">⚽ <strong>Gols:</strong> ${escapeHtml(lista.join(", "))}</div>`;
+    const div = state.isAuthorized ? divergenciaPlacar(jogo) : null;
+    if (div) faixaJogo += `<div class="aviso-placar">⚠️ ${escapeHtml(textoDivergenciaPlacar(div))} <a href="#" data-ir-gols>Ver gols</a></div>`;
   }
 
   // Futsal: resumo do confronto do dia (os outros quadros contra o mesmo adversário).
@@ -478,6 +480,7 @@ export function renderJogoDetail(root, state, jogoId){
   // tabs
   $$(".tab-btn", root).forEach(btn => btn.classList.toggle("active", btn.dataset.tab === activeTab));
   $$(".tab-panel", root).forEach(p => p.classList.toggle("active", p.dataset.panel === activeTab));
+  $("[data-ir-gols]", root)?.addEventListener("click", (e) => { e.preventDefault(); $(".tab-btn[data-tab='gols']", root)?.click(); });
   $$(".tab-btn", root).forEach(btn => btn.addEventListener("click", () => {
     activeTab = btn.dataset.tab;
     $$(".tab-btn", root).forEach(b => b.classList.toggle("active", b === btn));
@@ -812,6 +815,11 @@ function renderGolsPanel(jogo, atletas){
     <div class="card card-pad">
       <div class="card-title">Gols e assistências</div>
       <div class="card-sub">${eventos.length} evento(s) registrado(s)</div>
+      ${(() => {
+        const d = divergenciaPlacar(jogo);
+        if (!d) return "";
+        return `<div class="aviso-placar">⚠️ ${escapeHtml(textoDivergenciaPlacar(d))}${d.faltam < 0 ? ` <button class="btn btn-ghost btn-sm" id="btn-acertar-placar">Acertar placar para ${d.lancados}</button>` : ` Se foram gols sem autor, está tudo certo; senão, lance os gols que faltam abaixo.`}</div>`;
+      })()}
       ${rows || `<p style="color:var(--ink-faint); font-size:13px;">Nenhum gol registrado ainda.</p>`}
       <div class="form-grid" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--line);">
         ${ed ? `<div class="field span-2"><strong style="font-size:13px;">Editando o evento ${editandoEvt + 1}</strong></div>` : ""}
@@ -856,6 +864,11 @@ function wireGolsPanel(root, jogo, atletas, rerender){
     });
   });
   $("#btn-cancel-evt", panel)?.addEventListener("click", () => { editandoEvt = null; rerender(); });
+  $("#btn-acertar-placar", panel)?.addEventListener("click", async () => {
+    const n = (jogo.golsAssistencias || []).length;
+    try{ await updateJogoField(jogo.id, { placarNos: n }); toast(`Placar do nosso time acertado para ${n}.`, "ok"); }
+    catch(err){ toast("Erro: " + err.message, "err"); }
+  });
   // Gol contra não tem assistência do próprio time — desabilita o campo pra evitar dado inconsistente.
   const golSel = $("#evt-gol", panel);
   const assistSel = $("#evt-assist", panel);

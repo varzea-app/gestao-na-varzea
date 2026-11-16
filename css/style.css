@@ -895,3 +895,8 @@ body.sem-time main#view-root{margin-left:0; padding:28px 18px 60px; max-width:76
 .evo-chip-rep{background:var(--gold); border-color:var(--gold); color:#171717;}
 .evo-chip sup{font-size:10px; margin-left:3px; font-weight:700;}
 .evo-vazio{font-size:12.5px; color:var(--ink-faint); margin:4px 0 0;}
+
+/* Aviso: placar não bate com os gols lançados */
+.aviso-placar{font-size:13px; color:var(--ink); background:rgba(228,182,43,.16); border-left:3px solid var(--gold, #e4b62b); border-radius:8px; padding:9px 12px; margin:0 0 14px; line-height:1.45;}
+.aviso-placar .btn{margin-left:6px; vertical-align:middle;}
+.aviso-placar a{font-weight:700; color:var(--pitch);}

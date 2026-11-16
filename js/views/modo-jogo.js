@@ -28,19 +28,29 @@ let jogoAberto = null;     // id do jogo atualmente na tela (limpa a folha ao tr
 const chaveRelogio = (jogoId) => `modojogo_relogio_${TEAM.id}_${jogoId}`;
 const FASES = { pre: "Antes do jogo", t1: "1º tempo", int: "Intervalo", t2: "2º tempo", fim: "Fim de jogo" };
 
+// O relógio é gravado no próprio jogo (campo modoJogoRelogio), então outro celular
+// pode assumir de onde parou. Também fica no aparelho (localStorage), que vale
+// enquanto o envio não chega. Vale sempre o registro mais recente ("em").
+const relogiosRemotos = {};   // jogoId -> modoJogoRelogio vindo do Firestore
 function lerRelogio(jogoId){
-  try{
-    const r = JSON.parse(localStorage.getItem(chaveRelogio(jogoId)) || "null");
-    if (r && typeof r.acum === "number"){
-      // Formato antigo (sem fase): se já rodou, é 1º tempo.
-      const fase = r.fase || ((r.acum > 0 || r.inicio) ? "t1" : "pre");
-      return { fase, acum: r.acum, inicio: r.inicio || null };
-    }
-  }catch(_){}
-  return { fase: "pre", acum: 0, inicio: null };
+  let local = null;
+  try{ local = JSON.parse(localStorage.getItem(chaveRelogio(jogoId)) || "null"); }catch(_){}
+  if (local && typeof local.acum !== "number") local = null;
+  const remoto = relogiosRemotos[jogoId];
+  const r = (remoto && typeof remoto.acum === "number" && (!local || (remoto.em || 0) > (local.em || 0))) ? remoto : local;
+  if (r){
+    // Formato antigo (sem fase): se já rodou, é 1º tempo.
+    const fase = r.fase || ((r.acum > 0 || r.inicio) ? "t1" : "pre");
+    return { fase, acum: r.acum, inicio: r.inicio || null, em: r.em || 0 };
+  }
+  return { fase: "pre", acum: 0, inicio: null, em: 0 };
 }
 function gravarRelogio(jogoId, r){
-  try{ localStorage.setItem(chaveRelogio(jogoId), JSON.stringify(r)); }catch(_){}
+  const dado = { fase: r.fase, acum: r.acum, inicio: r.inicio || null, em: Date.now() };
+  try{ localStorage.setItem(chaveRelogio(jogoId), JSON.stringify(dado)); }catch(_){}
+  relogiosRemotos[jogoId] = dado;
+  // Sem esperar: se estiver sem sinal, o Firestore envia depois.
+  try{ updateJogoField(jogoId, { modoJogoRelogio: dado }).catch(err => console.warn("Relógio não sincronizado:", err)); }catch(_){}
 }
 const decorridoMs = (r) => r.acum + (r.inicio ? Date.now() - r.inicio : 0);
 function textoRelogio(ms){
@@ -304,6 +314,7 @@ export function renderModoJogo(root, state, jogoId){
     return;
   }
 
+  if (jogo.modoJogoRelogio) relogiosRemotos[jogo.id] = jogo.modoJogoRelogio;
   const adv = state.adversarios.find(a => a.id === jogo.adversarioId);
   const campo = state.campos.find(c => c.id === jogo.campoId);
   const atletas = state.atletas;

@@ -395,3 +395,21 @@ export function resumoGeral(jogos, porConfronto = false){
     vitorias, empates, derrotas,
   };
 }
+
+// Placar x gols lançados. Só avisa quando JÁ existem gols lançados e o número não
+// bate com o placar do nosso time (jogo antigo sem nenhum gol lançado não conta).
+// faltam > 0: placar maior que os gols lançados (gols sem autor ou ainda por lançar);
+// faltam < 0: mais gols lançados do que o placar mostra.
+export function divergenciaPlacar(jogo){
+  if (!jogo || jogo.status !== "realizado") return null;
+  const placar = jogo.placarNos;
+  const lancados = (jogo.golsAssistencias || []).length;
+  if (typeof placar !== "number" || lancados === 0 || placar === lancados) return null;
+  return { placar, lancados, faltam: placar - lancados };
+}
+export function textoDivergenciaPlacar(d){
+  const pl = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+  return d.faltam > 0
+    ? `O placar tem ${pl(d.placar, "gol", "gols")} do nosso time, mas só ${pl(d.lancados, "está lançado", "estão lançados")} em Gols & assistências (${pl(d.faltam, "gol sem autor", "gols sem autor")}).`
+    : `Há ${pl(d.lancados, "gol lançado", "gols lançados")} em Gols & assistências, mas o placar do nosso time mostra ${d.placar}.`;
+}
