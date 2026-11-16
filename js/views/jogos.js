@@ -61,12 +61,90 @@ function jogoFields(state){
   ];
 }
 
+// ----------------------------------------------------------------------------
+// Campo "Adversário" / "Campo" com busca e cadastro rápido.
+// A pessoa digita o nome; o app procura no cadastro. Se não achar, oferece
+// "Cadastrar adversário/campo" — cria só com o nome (o resto se completa depois,
+// no cadastro do item) e já seleciona. O valor vai num campo oculto (id).
+// ----------------------------------------------------------------------------
+const semAcento = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, " ");
+
+function comboHtml({ key, label, placeholder, valorId, lista }){
+  const nome = lista.find(x => x.id === valorId)?.nome || "";
+  return `
+    <div class="field span-2" data-combo="${key}">
+      <label>${label} *</label>
+      <input type="hidden" name="${key}" value="${escapeHtml(valorId || "")}">
+      <input type="text" data-combo-txt autocomplete="off" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(nome)}">
+      <div class="combo-lista" data-combo-lista style="display:none;"></div>
+      <div class="field-hint" data-combo-msg>${nome ? "✓ Selecionado" : ""}</div>
+    </div>`;
+}
+
+function ligarCombo(formEl, { key, lista, colecao, rotuloNovo, aviso }){
+  const box = formEl.querySelector(`[data-combo="${key}"]`);
+  const hid = box.querySelector(`input[name="${key}"]`);
+  const txt = box.querySelector("[data-combo-txt]");
+  const ul = box.querySelector("[data-combo-lista]");
+  const msg = box.querySelector("[data-combo-msg]");
+  const porNome = (t) => lista.find(x => semAcento(x.nome) === semAcento(t));
+  const escolher = (item) => {
+    hid.value = item.id; txt.value = item.nome; msg.textContent = "✓ Selecionado"; ul.style.display = "none";
+  };
+  const desenhar = () => {
+    const q = semAcento(txt.value);
+    const achados = lista.filter(x => !q || semAcento(x.nome).includes(q))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).slice(0, 8);
+    const exato = q && porNome(txt.value);
+    const itens = achados.map(x => `<button type="button" class="combo-item" data-id="${escapeHtml(x.id)}">${escapeHtml(x.nome)}</button>`);
+    if (q && !exato) itens.push(`<button type="button" class="combo-item combo-novo" data-novo="1">➕ Cadastrar ${rotuloNovo} “${escapeHtml(txt.value.trim())}”</button>`);
+    ul.innerHTML = itens.join("") || `<div class="combo-vazio">Nenhum ${rotuloNovo} cadastrado ainda. Digite o nome para cadastrar.</div>`;
+    ul.style.display = "";
+  };
+  txt.addEventListener("focus", desenhar);
+  txt.addEventListener("input", () => {
+    hid.value = ""; msg.textContent = "";
+    const ex = porNome(txt.value);
+    if (ex){ hid.value = ex.id; msg.textContent = "✓ Selecionado"; }
+    desenhar();
+  });
+  // mousedown (não click) para pegar antes de o campo perder o foco
+  ul.addEventListener("mousedown", (e) => e.preventDefault());
+  ul.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.id){ escolher(lista.find(x => x.id === b.dataset.id)); return; }
+    if (b.dataset.novo){
+      const nome = txt.value.trim().replace(/\s+/g, " ");
+      b.disabled = true; msg.textContent = "Cadastrando…";
+      try{
+        const ref = await createDoc(colecao, { nome });
+        const novo = { id: ref.id, nome };
+        lista.push(novo);
+        escolher(novo);
+        toast(`${aviso} “${nome}” cadastrado. Complete os demais dados em Cadastros.`, "ok");
+      }catch(err){
+        console.error(err); msg.textContent = "";
+        toast("Não foi possível cadastrar: " + (err.message || err), "err");
+      }
+    }
+  });
+  txt.addEventListener("blur", () => { setTimeout(() => { ul.style.display = "none"; }, 120); });
+  return {
+    valido(){
+      if (hid.value) return true;
+      const ex = porNome(txt.value);
+      if (ex){ escolher(ex); return true; }
+      return false;
+    },
+    focar(){ txt.focus(); },
+  };
+}
+
 function openJogoForm(state, item, onSaved, prefill){
-  if (state.adversarios.length === 0 || state.campos.length === 0){
-    toast("Cadastre ao menos 1 adversário e 1 campo antes de criar um jogo.", "err");
-    return;
-  }
   const fields = jogoFields(state);
+  // Listas locais: crescem se a pessoa cadastrar um adversário/campo aqui mesmo.
+  const listaAdv = state.adversarios.map(a => ({ id: a.id, nome: a.nome || "" }));
+  const listaCampo = state.campos.map(c => ({ id: c.id, nome: c.nome || "" }));
   const isEdit = !!item;
   const valores = item || prefill || null;
   openModal(`
@@ -77,7 +155,10 @@ function openJogoForm(state, item, onSaved, prefill){
     <div class="modal-body">
       <form id="jogo-form">
         ${!isEdit && ehFutsal() ? `<label style="display:flex; align-items:center; gap:8px; margin-bottom:14px; font-weight:600; cursor:pointer;"><input type="checkbox" id="dois-quadros"> Cadastrar os 2 quadros de uma vez (2º e 1º quadro)</label>` : ""}
-        <div class="form-grid">${fields.map(f => fieldHtml(f, valores)).join("")}</div>
+        <div class="form-grid">${fields.map(f =>
+          f.key === "adversarioId" ? comboHtml({ key: f.key, label: f.label, placeholder: "Digite o nome do adversário…", valorId: valores?.adversarioId, lista: listaAdv })
+          : f.key === "campoId" ? comboHtml({ key: f.key, label: f.label, placeholder: "Digite o nome do campo…", valorId: valores?.campoId, lista: listaCampo })
+          : fieldHtml(f, valores)).join("")}</div>
         ${!isEdit && ehFutsal() ? `<div class="field" id="field-horario-q1" style="display:none; max-width:240px; margin-top:12px;"><label>Horário do 1º quadro</label><input type="time" name="horario1"></div>
         <p class="field-hint" id="hint-dois-quadros" style="display:none;">Serão criados 2 jogos agendados, mesmo dia, adversário e campo: o 2º quadro (joga primeiro) e o 1º quadro. Placar e resultado você lança depois, em cada jogo.</p>` : ""}
         <div class="form-actions" style="justify-content:space-between;">
@@ -119,8 +200,13 @@ function openJogoForm(state, item, onSaved, prefill){
   };
   chkDois?.addEventListener("change", atualizarDois);
 
+  const comboAdv = ligarCombo(formEl, { key: "adversarioId", lista: listaAdv, colecao: "adversarios", rotuloNovo: "adversário", aviso: "Adversário" });
+  const comboCampo = ligarCombo(formEl, { key: "campoId", lista: listaCampo, colecao: "campos", rotuloNovo: "campo", aviso: "Campo" });
+
   $("#jogo-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!comboAdv.valido()){ toast("Escolha o adversário na lista ou cadastre um novo.", "err"); comboAdv.focar(); return; }
+    if (!comboCampo.valido()){ toast("Escolha o campo na lista ou cadastre um novo.", "err"); comboCampo.focar(); return; }
     const data = collectFormData(fields, e.target);
     if (chkDois?.checked){
       // Dois jogos de uma vez: 2º quadro (joga primeiro) e 1º quadro, agendados.
