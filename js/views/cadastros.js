@@ -167,6 +167,15 @@ function getSearchState(collectionName){
   return searchStates[collectionName] || "";
 }
 
+// Filtros por lista suspensa (hoje só em Atletas: Status e Posição). Cada tela
+// define `opts.filtros = [{ key, label, opcoes: [{value,label}], testa(item, valor) }]`;
+// o valor escolhido fica guardado por coleção (vazio = "Todos").
+const filterStates = {};
+const getFilterState = (collectionName, key) => (filterStates[collectionName] || {})[key] || "";
+function setFilterState(collectionName, key, valor){
+  (filterStates[collectionName] ||= {})[key] = valor;
+}
+
 // Visibilidade de colunas (só usada nas telas com `columnToggle: true`, hoje
 // só Atletas) — persistida no localStorage do navegador pra lembrar a
 // preferência entre sessões.
@@ -227,9 +236,11 @@ function renderCrudView(root, opts, state){
   const visibleCols = getVisibleColumns(opts);
   const sortFns = Object.fromEntries(opts.columns.map(c => [c.key, c.sort]));
 
-  const itemsFiltrados = searchTerm
-    ? items.filter(item => (item.nome || "").toLowerCase().includes(searchTerm.toLowerCase()))
-    : items;
+  const filtros = (typeof opts.filtros === "function" ? opts.filtros(state) : opts.filtros) || [];
+  const filtrosAtivos = filtros.filter(f => getFilterState(opts.collectionName, f.key));
+  const itemsFiltrados = items.filter(item =>
+    (!searchTerm || (item.nome || "").toLowerCase().includes(searchTerm.toLowerCase())) &&
+    filtrosAtivos.every(f => f.testa(item, getFilterState(opts.collectionName, f.key))));
   const sortedItems = sortRows(itemsFiltrados, sortState, sortFns, state);
 
   const rows = sortedItems.map(item => `
@@ -238,8 +249,8 @@ function renderCrudView(root, opts, state){
     </tr>
   `).join("");
 
-  const emptyMsg = searchTerm
-    ? `Nenhum(a) ${opts.singular.toLowerCase()} encontrado(a) para "${escapeHtml(searchTerm)}".`
+  const emptyMsg = (searchTerm || filtrosAtivos.length)
+    ? `Nenhum(a) ${opts.singular.toLowerCase()} encontrado(a)${searchTerm ? ` para "${escapeHtml(searchTerm)}"` : ""}${filtrosAtivos.length ? " com esses filtros" : ""}.`
     : `Nenhum(a) ${opts.singular.toLowerCase()} cadastrado(a) ainda.`;
 
   root.innerHTML = `
@@ -260,9 +271,20 @@ function renderCrudView(root, opts, state){
       <div class="manchete-titulo">${escapeHtml(m.titulo)}</div>
       <div class="manchete-sub">${escapeHtml(m.sub)}</div>
     </div>`; })() : ""}
-    <div class="field" style="max-width:320px; margin-bottom:16px;">
-      <label>Buscar por nome</label>
-      <input type="text" id="input-busca" placeholder="Digite pra filtrar…" value="${escapeHtml(searchTerm)}">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+      <div class="field" style="flex:1 1 220px; max-width:320px; margin:0;">
+        <label>Buscar por nome</label>
+        <input type="text" id="input-busca" placeholder="Digite pra filtrar…" value="${escapeHtml(searchTerm)}">
+      </div>
+      ${filtros.map(f => `
+      <div class="field" style="flex:0 1 170px; margin:0;">
+        <label>${escapeHtml(f.label)}</label>
+        <select data-filtro="${f.key}">
+          <option value="">Todos</option>
+          ${f.opcoes.map(o => `<option value="${escapeHtml(o.value)}" ${getFilterState(opts.collectionName, f.key) === o.value ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+        </select>
+      </div>`).join("")}
+      ${filtros.length ? `<div style="font-size:12.5px; color:var(--ink-soft); padding-bottom:10px;">${itemsFiltrados.length === items.length ? `${items.length} no total` : `Mostrando ${itemsFiltrados.length} de ${items.length}`}${filtrosAtivos.length ? ` · <a href="#" id="limpar-filtros">limpar filtros</a>` : ""}</div>` : ""}
     </div>
     <div class="table-wrap">
       <table>
@@ -279,6 +301,16 @@ function renderCrudView(root, opts, state){
   $("#input-busca", root)?.addEventListener("input", (e) => {
     searchStates[opts.collectionName] = e.target.value;
     reRenderKeepingFocus(root, () => renderCrudView(root, opts, state));
+  });
+
+  $$("[data-filtro]", root).forEach(sel => sel.addEventListener("change", () => {
+    setFilterState(opts.collectionName, sel.dataset.filtro, sel.value);
+    renderCrudView(root, opts, state);
+  }));
+  $("#limpar-filtros", root)?.addEventListener("click", (e) => {
+    e.preventDefault();
+    filtros.forEach(f => setFilterState(opts.collectionName, f.key, ""));
+    renderCrudView(root, opts, state);
   });
 
   $("#btn-new").addEventListener("click", () => openCrudForm(opts, null));
@@ -388,6 +420,14 @@ export function renderAtletas(root, state){
     singular: "Atleta",
     plural: "Atletas",
     columnToggle: true,
+    filtros: () => [
+      { key: "status", label: "Status",
+        opcoes: [{ value: "ativo", label: "Ativos" }, { value: "inativo", label: "Inativos" }],
+        testa: (a, v) => v === "inativo" ? a.ativo === false : a.ativo !== false },
+      { key: "posicao", label: "Posição",
+        opcoes: [...categoriasAtleta().map(p => ({ value: p, label: p })), { value: "__sem", label: "Sem posição" }],
+        testa: (a, v) => v === "__sem" ? !a.posicao : a.posicao === v },
+    ],
     manchete: (items) => {
       const ativos = items.filter(a => a.ativo !== false);
       const por = {};
