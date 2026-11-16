@@ -835,12 +835,12 @@ function renderRelacionadosPanel(jogo, atletas, presencas){
         ${extraEscal ? `<button type="button" class="btn btn-ghost btn-sm" data-rel-preencher="escalacoes">Incluir quem está nas escalações (${extraEscal})</button>` : ""}
       </div>
       <div class="player-grid player-grid-escalacao">
-        ${disponiveis.map(a => `
+        ${porPosicao(disponiveis).map(g => `<div class="player-grupo">${escapeHtml(g.titulo)}</div>${g.atletas.map(a => `
           <label class="player-chip ${sel.has(a.id) ? "selected" : ""}" data-chip="${a.id}">
             <input type="checkbox" value="${a.id}" ${sel.has(a.id) ? "checked" : ""}>
             <span class="player-num">${a.numero ?? "–"}</span>
             <span style="flex:1;">${escapeHtml(a.nome)}${resp.get(a.id) === "vou" ? ` <small style="color:var(--ink-faint);">confirmou</small>` : ""}</span>
-          </label>`).join("")}
+          </label>`).join("")}`).join("")}
       </div>
       <div class="form-actions"><button class="btn btn-primary" data-save-relacionados>Salvar relacionados</button></div>
     </div>`;

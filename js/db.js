@@ -111,6 +111,20 @@ export function listenPresencas(jogoId, cb){
   });
 }
 
+// Todos os "vou" do time, de todos os jogos (usado na Avaliação: quem confirmou
+// presença pode ter entrado no jogo mesmo sem constar em nenhuma escalação).
+export function listenPresencasConfirmadas(cb){
+  const q = query(colRef("presencas"), where("resposta", "==", "vou"));
+  return onSnapshot(q, (snap) => {
+    const items = [];
+    snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+    cb(items);
+  }, (err) => {
+    console.error("Erro ao ouvir presencas:", err);
+    cb([], err);
+  });
+}
+
 export async function setPresenca(jogoId, atletaId, resposta){
   exigirPlanoVigente();
   return setDoc(docRef("presencas", `${jogoId}_${atletaId}`), {
