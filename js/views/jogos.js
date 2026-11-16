@@ -9,7 +9,7 @@ import { resultadoJogo, desempateJogo, normalizeEscalacao, ehJogador, GOL_CONTRA
 import { linkPresenca } from "./presenca.js";
 import { openFlyerModal } from "./flyer.js";
 import { abrirImagemConfirmados } from "./imagem-confirmados.js";
-import { modoJogoLiberado } from "./modo-jogo.js";
+import { modoJogoLiberado, emAndamento } from "./modo-jogo.js";
 import { MESES, filtrarPorQuadro, quadroChipsHtml, wireQuadroChips } from "../filters.js";
 
 // Esconde um elemento quando o plano do time não inclui o recurso.
@@ -248,7 +248,7 @@ export function renderJogosList(root, state){
           <div class="hist-adv">vs ${escapeHtml(nomeAdv(j.adversarioId) || "—")}${rotuloQuadro(j) ? ` <span class="badge badge-pending">${rotuloQuadro(j)}</span>` : ""}</div>
           <div class="hist-meta">${j.horario ? `${escapeHtml(j.horario)} · ` : ""}${escapeHtml(nomeCampo(j.campoId) || "—")}${j.tipoPartida ? ` · ${escapeHtml(j.tipoPartida)}` : ""}</div>
         </div>
-        <div class="hist-placar"><span class="badge badge-pending">${txtDias(n) || "Agendado"}</span></div>
+        <div class="hist-placar"><span class="badge ${emAndamento(j) ? "badge-ok" : "badge-pending"}">${emAndamento(j) ? "⏱ Em andamento" : (txtDias(n) || "Agendado")}</span></div>
       </div>`;
   };
   const cartaoRealizado = (j) => {
@@ -399,6 +399,9 @@ export function renderJogoDetail(root, state, jogoId){
     const vou = (presencasJogo || []).filter(p => p.resposta === "vou").length;
     const talvez = (presencasJogo || []).filter(p => p.resposta === "talvez").length;
     const quando = nd === null ? "" : nd === 0 ? "É hoje" : nd === 1 ? "É amanhã" : nd < 0 ? `Data passada há ${-nd} dia${nd === -1 ? "" : "s"} — lembre de marcar como realizado` : `Faltam ${nd} dias`;
+    if (emAndamento(jogo)){
+      faixaJogo = `<div class="aviso-placar">⏱ <strong>Jogo em andamento</strong> — placar até agora: ${TEAM.nomeHtml} ${jogo.placarNos ?? 0} x ${jogo.placarAdversario ?? 0} ${escapeHtml(adv?.nome || "adversário")}. Ele só entra nas estatísticas quando for encerrado.${state.isAuthorized ? ` <button class="btn btn-primary btn-sm" id="btn-contabilizar">Encerrar e contabilizar</button>` : ""}</div>`;
+    } else
     faixaJogo = `<div class="jogo-faixa"><strong>${quando}</strong>${presencasJogo ? ` · ${vou} confirmado${vou === 1 ? "" : "s"}${talvez ? `, ${talvez} talvez` : ""}` : ""}</div>`;
   } else {
     const cont = {};
@@ -447,7 +450,7 @@ export function renderJogoDetail(root, state, jogoId){
         <span>📍 ${escapeHtml(campo?.nome || "Campo não definido")}</span>
         ${jogo.tipoPartida ? `<span>🏷️ ${escapeHtml(jogo.tipoPartida)}</span>` : ""}
         ${desempateJogo(jogo) ? `<span>⚖️ ${escapeHtml(desempateJogo(jogo).texto)}</span>` : ""}
-        <span>${jogo.status === "realizado" ? (resultado ? { vitoria: "🏆 Vitória", empate: "➖ Empate", derrota: "❌ Derrota" }[resultado] : "Realizado") : "🗓️ Agendado"}</span>
+        <span>${jogo.status === "realizado" ? (resultado ? { vitoria: "🏆 Vitória", empate: "➖ Empate", derrota: "❌ Derrota" }[resultado] : "Realizado") : (emAndamento(jogo) ? "⏱ Em andamento" : "🗓️ Agendado")}</span>
       </div>
     </div>
 
@@ -490,6 +493,11 @@ export function renderJogoDetail(root, state, jogoId){
   $("#btn-edit-jogo").addEventListener("click", () => openJogoForm(state, jogo));
   $("#btn-flyer").addEventListener("click", () => openFlyerModal(state, jogo));
   $("#btn-img-confirmados")?.addEventListener("click", () => abrirImagemConfirmados(state, jogo, presencasJogo));
+  $("#btn-contabilizar")?.addEventListener("click", async () => {
+    if (!(await confirmAction(`Encerrar o jogo em ${jogo.placarNos ?? 0} x ${jogo.placarAdversario ?? 0} e contabilizar nas estatísticas?`, { confirmLabel: "Encerrar e contabilizar", title: "Encerrar jogo" }))) return;
+    try{ await updateJogoField(jogo.id, { status: "realizado" }); toast("Jogo encerrado e contabilizado.", "ok"); }
+    catch(err){ toast("Erro: " + err.message, "err"); }
+  });
   $("#btn-modojogo")?.addEventListener("click", () => { location.hash = `#modojogo/${jogo.id}`; });
   $("#btn-presenca").addEventListener("click", () => { location.hash = `#presenca/${jogo.id}`; });
   $("#btn-presenca-link").addEventListener("click", async () => {

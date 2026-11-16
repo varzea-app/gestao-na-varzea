@@ -45,6 +45,11 @@ function lerRelogio(jogoId){
   }
   return { fase: "pre", acum: 0, inicio: null, em: 0 };
 }
+// Bola rolando: já marca o jogo como em andamento (sem esperar o primeiro gol).
+function marcarEmAndamento(jogo){
+  if (jogo.status === "realizado" || typeof jogo.modoJogoEm === "number") return;
+  try{ updateJogoField(jogo.id, { modoJogoEm: Date.now() }).catch(err => console.warn(err)); }catch(_){}
+}
 function gravarRelogio(jogoId, r){
   const dado = { fase: r.fase, acum: r.acum, inicio: r.inicio || null, em: Date.now() };
   try{ localStorage.setItem(chaveRelogio(jogoId), JSON.stringify(dado)); }catch(_){}
@@ -145,28 +150,46 @@ async function gravar(jogo, campos, mensagem){
   }
 }
 
-// Ao lançar a primeira ação de um jogo agendado, ele passa a "realizado"
-// (é assim que ele entra nas estatísticas).
-const statusCampos = (jogo) => jogo.status === "realizado" ? {} : { status: "realizado", modoJogoEm: Date.now() };
+// Ao lançar a primeira ação, o jogo fica "em andamento": segue como agendado (não
+// entra nas estatísticas) e só marca modoJogoEm, que mantém o Modo jogo liberado por
+// 12 h. Ele só passa a "realizado" — e a contar no ranking, dashboard etc. — quando
+// for encerrado (Encerrar jogo / Encerrar e contabilizar).
+const statusCampos = (jogo) => (jogo.status === "realizado" || typeof jogo.modoJogoEm === "number") ? {} : { modoJogoEm: Date.now() };
+const CONTABILIZAR = { status: "realizado" };
+export const emAndamento = (jogo) => jogo.status !== "realizado" && typeof jogo.modoJogoEm === "number";
 
 // ----------------------------------------------------------------------------
 // Avisos para o grupo do WhatsApp
 // Cada ação gera uma mensagem pronta numa "fila". O botão Enviar abre o WhatsApp
 // com o texto escrito; a pessoa escolhe o grupo e envia. Nada é enviado sozinho.
 // ----------------------------------------------------------------------------
-const chaveFila = (jogoId) => `modojogo_fila_${TEAM.id}_${jogoId}`;
-function lerFila(jogoId){
-  try{ const f = JSON.parse(localStorage.getItem(chaveFila(jogoId)) || "[]"); return Array.isArray(f) ? f : []; }catch(_){ return []; }
+// A fila fica no próprio jogo (modoJogoFila), então todos os celulares veem os mesmos
+// avisos. Quando alguém envia ou descarta um aviso, ele sai da fila de todo mundo.
+// Cada aviso é um item do mapa (uma gravação por aviso, sem um celular sobrescrever o
+// outro); enviado/descartado vira { feito: true } (sem o texto, para pesar pouco).
+const filasRemotas = {};   // jogoId -> { idDoAviso: {rotulo, texto, em, feito} }
+function mesclarFila(local, remoto){
+  const r = { ...(remoto || {}) };
+  Object.entries(local || {}).forEach(([id, it]) => {
+    if (!r[id] || (it.feito && !r[id].feito)) r[id] = it;   // gravação ainda a caminho: vale a local
+  });
+  return r;
 }
-function gravarFila(jogoId, fila){
-  try{ localStorage.setItem(chaveFila(jogoId), JSON.stringify(fila.slice(-8))); }catch(_){}
+function lerFila(jogoId){
+  return Object.entries(filasRemotas[jogoId] || {})
+    .filter(([, it]) => it && !it.feito && it.texto)
+    .map(([id, it]) => ({ id, rotulo: it.rotulo, texto: it.texto, em: it.em || 0 }))
+    .sort((a, b) => a.em - b.em)
+    .slice(-8);
+}
+function gravarItemFila(jogoId, id, item){
+  (filasRemotas[jogoId] ||= {})[id] = item;
+  try{ updateJogoField(jogoId, { [`modoJogoFila.${id}`]: item }).catch(err => console.warn("Aviso não sincronizado:", err)); }catch(_){}
 }
 function enfileirar(jogoId, rotulo, texto){
-  const fila = lerFila(jogoId);
-  fila.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), rotulo, texto });
-  const novo = fila[fila.length - 1].id;
-  gravarFila(jogoId, fila);
-  return novo;
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  gravarItemFila(jogoId, id, { rotulo, texto, em: Date.now(), feito: false });
+  return id;
 }
 // Aviso de gol/placar: se a ação for desfeita, o aviso pendente sai da fila junto.
 function enfileirarGol(jogoId, rotulo, texto){
@@ -175,7 +198,9 @@ function enfileirarGol(jogoId, rotulo, texto){
   return id;
 }
 function tirarDaFila(jogoId, id){
-  gravarFila(jogoId, lerFila(jogoId).filter(m => m.id !== id));
+  const it = (filasRemotas[jogoId] || {})[id];
+  if (!it) return;
+  gravarItemFila(jogoId, id, { rotulo: it.rotulo, em: it.em || 0, feito: true });
 }
 
 // c = { jogo, adv, campo, atletas, eventos, nos, advP }
@@ -315,6 +340,7 @@ export function renderModoJogo(root, state, jogoId){
   }
 
   if (jogo.modoJogoRelogio) relogiosRemotos[jogo.id] = jogo.modoJogoRelogio;
+  filasRemotas[jogo.id] = mesclarFila(filasRemotas[jogo.id], jogo.modoJogoFila);
   const adv = state.adversarios.find(a => a.id === jogo.adversarioId);
   const campo = state.campos.find(c => c.id === jogo.campoId);
   const atletas = state.atletas;
@@ -338,7 +364,7 @@ export function renderModoJogo(root, state, jogoId){
     <div class="mj">
       <div class="mj-top">
         <a href="#jogos/${jogo.id}" class="mj-voltar">&larr; Voltar ao jogo</a>
-        <span class="mj-status ${jogo.status === "realizado" ? "ok" : ""}">${jogo.status === "realizado" ? "Realizado" : "Agendado"}</span>
+        <span class="mj-status ${jogo.status === "realizado" ? "ok" : ""}">${jogo.status === "realizado" ? "Realizado" : (emAndamento(jogo) ? "Em andamento" : "Agendado")}</span>
       </div>
       <div class="mj-info">${formatDateLong(jogo.data)}${jogo.horario ? ` · ${escapeHtml(jogo.horario)}` : ""} · ${escapeHtml(campo?.nome || "Campo não definido")}</div>
 
@@ -382,6 +408,7 @@ export function renderModoJogo(root, state, jogoId){
       ${fila.length ? `
       <div class="mj-fila">
         <div class="mj-fila-titulo">📲 Para enviar no grupo (${fila.length})</div>
+        <div class="mj-fila-sub">Vale para todos os celulares: quem enviar primeiro tira o aviso dos outros.</div>
         ${(filaAberta ? fila : fila.slice(-3)).map(m => `
         <div class="mj-fila-item">
           <span class="mj-fila-rot">${escapeHtml(m.rotulo)}</span>
@@ -397,8 +424,9 @@ export function renderModoJogo(root, state, jogoId){
 
       <div class="mj-rodape">
         ${jogo.status === "realizado"
-          ? `<span class="mj-nota">Jogo marcado como realizado — já conta nas estatísticas.</span>`
-          : `<button class="btn btn-primary" id="mj-encerrar">Marcar jogo como realizado</button>`}
+          ? `<span class="mj-nota">Jogo encerrado — já conta nas estatísticas.</span>`
+          : `${emAndamento(jogo) ? `<span class="mj-nota">⏱ Jogo em andamento: só entra nas estatísticas depois de encerrado.</span>` : ""}
+             <button class="btn btn-primary" id="mj-encerrar">Encerrar e contabilizar o jogo</button>`}
         <a href="#jogos/${jogo.id}" class="btn btn-ghost">Abrir súmula completa</a>
       </div>
     </div>
@@ -483,7 +511,7 @@ function ligar(root, state, jogo, atletas){
   }));
 
   // Cronômetro e tempos
-  $("#mj-ini-t1", root)?.addEventListener("click", () => { mudarFase(jogo.id, "t1", true); enfileirar(jogo.id, "Início da partida", msgInicio(ctx())); re(); });
+  $("#mj-ini-t1", root)?.addEventListener("click", () => { marcarEmAndamento(jogo); mudarFase(jogo.id, "t1", true); enfileirar(jogo.id, "Início da partida", msgInicio(ctx())); re(); });
   $("#mj-rel-toggle", root)?.addEventListener("click", () => {
     const r = lerRelogio(jogo.id);
     mudarFase(jogo.id, r.fase, !r.inicio);
@@ -494,7 +522,7 @@ function ligar(root, state, jogo, atletas){
   $("#mj-fim-jogo", root)?.addEventListener("click", async () => {
     mudarFase(jogo.id, "fim", false);
     enfileirar(jogo.id, "Fim de jogo", msgFimJogo(ctx()));
-    if (jogo.status !== "realizado") await gravar(jogo, statusCampos(jogo), "Jogo encerrado e marcado como realizado.");
+    if (jogo.status !== "realizado") await gravar(jogo, CONTABILIZAR, "Jogo encerrado e contabilizado.");
     else toast("Jogo encerrado.", "ok");
     re();
   });
@@ -546,7 +574,7 @@ function ligar(root, state, jogo, atletas){
 
   // Encerrar
   $("#mj-encerrar", root)?.addEventListener("click", async () => {
-    await gravar(jogo, statusCampos(jogo), "Jogo marcado como realizado.");
+    await gravar(jogo, CONTABILIZAR, "Jogo encerrado e contabilizado.");
   });
 
   // ---- Folha de lançamento ----
