@@ -130,7 +130,10 @@ export function renderRanking(root, state){
     });
   }
 
-  const stats = statsPorAtleta(state.atletas.filter(ehJogador), jogosFiltrados, votanteIds);
+  let stats = statsPorAtleta(state.atletas.filter(ehJogador), jogosFiltrados, votanteIds);
+  // Partida específica: é a nota real daquele jogo, sem ajuste pela média do time
+  // (o ajuste existe para períodos com poucos jogos e não faz sentido com 1 jogo só).
+  if (filtroPartida) stats = stats.map(s => ({ ...s, media: s.mediaBruta ?? s.media }));
   const listaFinal = ordenarPorMetrica(filtrarPorMetrica(stats, activeMetric), activeMetric);
 
   const top3 = listaFinal.slice(0, 3);
@@ -207,7 +210,7 @@ export function renderRanking(root, state){
       </div>
     </div>
 
-    ${activeMetric === "nota" ? `<p class="rank-nota-info">Média das notas recebidas, equilibrada com a média do time: quem jogou menos partidas fica mais perto da média geral.</p>` : ""}
+    ${activeMetric === "nota" ? `<p class="rank-nota-info">${filtroPartida ? "Média das notas recebidas nesta partida." : "Média das notas recebidas, equilibrada com a média do time: quem jogou menos partidas fica mais perto da média geral."}</p>` : ""}
 
     ${votantes.length > 0 ? `
       <div style="margin-bottom:20px;">
