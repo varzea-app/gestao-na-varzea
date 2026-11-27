@@ -7,6 +7,7 @@ import {
 import { categoriasAtleta } from "../modalidade.js";
 import { temRecurso } from "../planos.js";
 import { extratoJogadorDados, mesLabel, fmtBRL, linhaPix } from "./financeiro.js";
+import { jogosRealizados, idsDaPartida, golsEAssistenciasPorAtleta, resultadoJogo, desempateJogo } from "../stats.js";
 
 // ============================================================================
 // Meu espaço — a área do jogador que entrou com o link individual.
@@ -70,6 +71,7 @@ export function renderMeuEspaco(root, state){
     carregarPrivado(atleta);
   }
   $("#me-nome").textContent = atleta.nome;
+  atualizarDesempenho();
   atualizarPresencas();
   atualizarFinanceiro();
 }
@@ -93,6 +95,11 @@ function esqueleto(atleta){
       <div class="card-sub">Sua confirmação de presença. Você pode mudar de ideia quando quiser.</div>
       <div id="me-presencas"></div>
     </section>` : ""}
+
+    <section class="card card-pad" style="margin-bottom:16px;">
+      <h2 class="card-title">Meu desempenho</h2>
+      <div id="me-desempenho"></div>
+    </section>
 
     <section class="card card-pad" style="margin-bottom:16px;">
       <h2 class="card-title">Meu cadastro</h2>
@@ -242,4 +249,50 @@ function atualizarFinanceiro(){
       <thead><tr><th>Mês</th><th>Situação</th><th>Pago em</th><th>Valor</th></tr></thead>
       <tbody>${rows || `<tr class="empty-row"><td colspan="4">Sem mensalidades no período.</td></tr>`}</tbody>
     </table></div>`;
+}
+
+// ----------------------------------------------------------------------------
+// Desempenho: jogos, gols e assistências no total e as últimas 5 partidas em que
+// o jogador esteve (relacionado, escalação inicial ou final).
+// ----------------------------------------------------------------------------
+
+const ROTULO_RESULTADO = { vitoria: ["V", "badge-ok"], empate: ["E", "badge-off"], derrota: ["D", "badge-danger"] };
+
+function atualizarDesempenho(){
+  const box = $("#me-desempenho");
+  if (!box || !ctx) return;
+  const { state, atletaId } = ctx;
+  const realizados = jogosRealizados(state.jogos);
+  const dele = realizados.filter(j => idsDaPartida(j).has(atletaId));
+  const ga = golsEAssistenciasPorAtleta(realizados)[atletaId] || { gols: 0, assistencias: 0 };
+  const ultimas = [...dele].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 5);
+
+  const linhas = ultimas.map(j => {
+    const adv = state.adversarios.find(a => a.id === j.adversarioId)?.nome || "Adversário";
+    const r = resultadoJogo(j);
+    const [letra, cls] = ROTULO_RESULTADO[r] || ["—", "badge-off"];
+    const placar = r ? `${j.placarNos} x ${j.placarAdversario}` : "—";
+    const desempate = desempateJogo(j);
+    const meu = golsEAssistenciasPorAtleta([j])[atletaId] || { gols: 0, assistencias: 0 };
+    const partes = [];
+    if (meu.gols) partes.push(`⚽ ${meu.gols} ${meu.gols === 1 ? "gol" : "gols"}`);
+    if (meu.assistencias) partes.push(`🅰️ ${meu.assistencias} ${meu.assistencias === 1 ? "assistência" : "assistências"}`);
+    return `
+      <div class="me-jogo me-jogo-linha">
+        <div style="min-width:0;">
+          <strong>vs ${escapeHtml(adv)}</strong>
+          <div class="me-jogo-sub">${escapeHtml(formatDate(j.data))}${desempate ? ` · ${escapeHtml(desempate.texto)}` : ""}${partes.length ? ` · ${partes.join(" · ")}` : ""}</div>
+        </div>
+        <div class="me-jogo-res"><span class="badge ${cls}">${letra}</span> <strong style="font-family:var(--font-mono);">${placar}</strong></div>
+      </div>`;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr); margin-bottom:12px;">
+      <div class="kpi-tile"><div class="kpi-label">Jogos</div><div class="kpi-value" style="font-size:24px;">${dele.length}</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Gols</div><div class="kpi-value" style="font-size:24px;">${ga.gols}</div></div>
+      <div class="kpi-tile"><div class="kpi-label" style="letter-spacing:.03em; font-size:10px;">Assistências</div><div class="kpi-value" style="font-size:24px;">${ga.assistencias}</div></div>
+    </div>
+    <div class="card-sub" style="margin-bottom:4px;">Últimas ${ultimas.length || 5} partidas em que você esteve</div>
+    ${linhas || `<p class="field-hint">Você ainda não tem partidas registradas.</p>`}`;
 }
