@@ -113,7 +113,7 @@ function esqueleto(atleta){
     </section>
 
     ${temRecurso("financeiro") ? `
-    <section class="card card-pad" style="margin-bottom:16px;">
+    <section class="card card-pad" id="me-fin-secao" style="margin-bottom:16px; display:none;">
       <h2 class="card-title">Meu extrato financeiro</h2>
       <div id="me-financeiro"></div>
     </section>` : ""}
@@ -220,6 +220,9 @@ function atualizarFinanceiro(){
   const atleta = ctx.state.atletas.find(a => a.id === ctx.atletaId);
   if (!atleta) return;
   const d = extratoJogadorDados({ configFinanceiro: ctx.config, financeiro: ctx.financeiro }, atleta);
+  // Quem não paga mensalidade e nunca pagou não tem o que ver aqui: a seção fica escondida.
+  const secao = $("#me-fin-secao");
+  if (secao) secao.style.display = (atleta.pagante || d.linhas.length) ? "" : "none";
   const rows = [...d.linhas].reverse().map(l => `
     <tr>
       <td>${mesLabel(l.mes)}</td>
