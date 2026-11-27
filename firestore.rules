@@ -54,6 +54,27 @@ service cloud.firestore {
       return dadosTime(t).plano in ['craque', 'teste'];
     }
 
+    // ------------------------------------------------------------------
+    // Jogador com conta Google: o documento times/{t}/vinculos/{uid} liga a
+    // conta a UM atleta (criado ao usar o link individual de convite).
+    // ------------------------------------------------------------------
+    function caminhoVinculo(t) {
+      return /databases/$(database)/documents/times/$(t)/vinculos/$(request.auth.uid);
+    }
+    function temVinculo(t) {
+      return logado() && exists(caminhoVinculo(t));
+    }
+    function souAtleta(t, atletaId) {
+      return temVinculo(t) && get(caminhoVinculo(t)).data.atletaId == atletaId;
+    }
+    // Convite (link individual) ainda válido para o atleta informado.
+    function conviteValido(t, token, atletaId) {
+      return exists(/databases/$(database)/documents/times/$(t)/convites/$(token))
+        && get(/databases/$(database)/documents/times/$(t)/convites/$(token)).data.usado == false
+        && get(/databases/$(database)/documents/times/$(t)/convites/$(token)).data.expiraEm > request.time
+        && get(/databases/$(database)/documents/times/$(t)/convites/$(token)).data.atletaId == atletaId;
+    }
+
     // Modalidade do time: campo, society ou futsal (ou sem o campo = campo).
     function modalidadeValida(d) {
       return !('modalidade' in d) || d.modalidade in ['campo', 'society', 'futsal'];
@@ -161,7 +182,24 @@ service cloud.firestore {
       }
       match /atletas/{id} {
         allow read: if true;
-        allow write: if podeEscrever(t);
+        allow create, delete: if podeEscrever(t);
+        // A equipe edita tudo. O jogador vinculado edita só o próprio cadastro,
+        // e só estes campos (nunca ativo, pagante, direito a voto etc.).
+        allow update: if podeEscrever(t)
+          || (ativo(t)
+              && souAtleta(t, id)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['nome', 'nomeCompleto', 'posicao', 'numero'])
+              && request.resource.data.nome is string
+              && request.resource.data.nome.size() > 0
+              && request.resource.data.nome.size() <= 40
+              && (!('nomeCompleto' in request.resource.data)
+                  || (request.resource.data.nomeCompleto is string && request.resource.data.nomeCompleto.size() <= 80))
+              && (!('posicao' in request.resource.data)
+                  || (request.resource.data.posicao is string && request.resource.data.posicao.size() <= 30))
+              && (!('numero' in request.resource.data)
+                  || request.resource.data.numero == null
+                  || request.resource.data.numero is number));
       }
       match /jogos/{id} {
         allow read: if true;
@@ -170,18 +208,69 @@ service cloud.firestore {
 
       // CPF e nascimento: nunca públicos.
       match /atletas_privado/{id} {
-        allow read: if isMembro(t);
-        allow write: if podeEscrever(t);
+        allow read: if isMembro(t) || souAtleta(t, id);
+        allow create: if podeEscrever(t)
+          || (ativo(t)
+              && souAtleta(t, id)
+              && request.resource.data.keys().hasOnly(['telefone', 'cpf', 'dataNascimento']));
+        allow update: if podeEscrever(t)
+          || (ativo(t)
+              && souAtleta(t, id)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['telefone', 'cpf', 'dataNascimento']));
+        allow delete: if podeEscrever(t);
+      }
+
+      // Convite individual de acesso (link por atleta). O id do documento é o
+      // código secreto do link: só quem tem o link consegue ler (não há listagem
+      // para quem não é da equipe). Uso único e com validade.
+      match /convites/{token} {
+        allow get: if logado();
+        allow list: if isMembro(t);
+        allow create, delete: if podeEscrever(t);
+        allow update: if podeEscrever(t)
+          // O jogador marca como usado, na mesma gravação em que cria o próprio vínculo.
+          || (logado()
+              && resource.data.usado == false
+              && request.resource.data.usado == true
+              && request.resource.data.usadoPor == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['usado', 'usadoEm', 'usadoPor'])
+              && getAfter(caminhoVinculo(t)).data.token == token);
+      }
+
+      // Vínculo conta Google → atleta. Cada conta tem no máximo um (id = uid).
+      match /vinculos/{uid} {
+        allow get: if logado() && (request.auth.uid == uid || isMembro(t));
+        allow list: if isMembro(t);
+        allow create: if logado()
+          && request.auth.uid == uid
+          && ativo(t)
+          && request.resource.data.keys().hasOnly(['atletaId', 'email', 'token', 'criadoEm'])
+          && request.resource.data.email == emailAtual()
+          && request.resource.data.criadoEm == request.time
+          && request.resource.data.token is string
+          && request.resource.data.atletaId is string
+          && conviteValido(t, request.resource.data.token, request.resource.data.atletaId)
+          && getAfter(/databases/$(database)/documents/times/$(t)/convites/$(request.resource.data.token)).data.usado == true;
+        // Só a equipe desfaz o vínculo.
+        allow delete: if podeEscrever(t);
       }
 
       // Financeiro e configuração (mensalidade, Pix): só a equipe lê; só grava
       // com plano Craque (ou teste). Dono da plataforma sempre pode.
       match /financeiro/{id} {
-        allow read: if isMembro(t);
+        // O jogador vinculado lê só as linhas do próprio atleta (mensalidade/isenção).
+        allow read: if isMembro(t)
+          || ('atletaId' in resource.data
+              && souAtleta(t, resource.data.atletaId)
+              && planoCraque(t));
         allow write: if podeEscrever(t) && (isSuper() || planoCraque(t));
       }
       match /configuracoes/{id} {
-        allow read: if isMembro(t);
+        // O jogador vinculado lê a configuração geral (valor da mensalidade e Pix).
+        allow read: if isMembro(t)
+          || (id == 'geral' && temVinculo(t) && planoCraque(t));
         allow write: if podeEscrever(t) && (isSuper() || planoCraque(t));
       }
 

@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
-  query, orderBy, where, serverTimestamp, setDoc, getDoc, writeBatch
+  query, orderBy, where, serverTimestamp, setDoc, getDoc, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { db, auth, ehSuperAdmin } from "./auth.js";
 import { TEAM } from "./tenant.js";
@@ -209,4 +209,89 @@ export async function apagarEmLote(itens){
     itens.slice(i, i + 400).forEach(it => lote.delete(docRef(it.colecao, it.id)));
     await lote.commit();
   }
+}
+
+// ----------------------------------------------------------------------------
+// Acesso do jogador (conta Google ligada a um atleta, por link individual)
+//   convites/{token}  → link de uso único, com validade (criado pela equipe)
+//   vinculos/{uid}    → conta Google ↔ atleta (criado pelo jogador ao usar o link)
+// ----------------------------------------------------------------------------
+
+// Código secreto do link (24 bytes aleatórios, em texto seguro para URL).
+export function novoTokenConvite(){
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// Gera o link individual de um atleta. Convites antigos dele (usados ou não)
+// são apagados, então só existe um link válido por atleta.
+export async function criarConvite(atletaId, tokensAntigos = [], dias = 7){
+  exigirPlanoVigente();
+  const token = novoTokenConvite();
+  const lote = writeBatch(db);
+  tokensAntigos.forEach(t => lote.delete(docRef("convites", t)));
+  lote.set(docRef("convites", token), {
+    atletaId, usado: false,
+    expiraEm: Timestamp.fromDate(new Date(Date.now() + dias * 86400000)),
+    criadoPor: (auth.currentUser?.email || "").toLowerCase(),
+    criadoEm: serverTimestamp(),
+  });
+  await lote.commit();
+  return token;
+}
+
+export async function cancelarConvites(tokens){
+  exigirPlanoVigente();
+  const lote = writeBatch(db);
+  tokens.forEach(t => lote.delete(docRef("convites", t)));
+  await lote.commit();
+}
+
+// A equipe tira o acesso: apaga o vínculo (e os convites) do atleta.
+export async function desvincularJogador(uid, tokens = []){
+  exigirPlanoVigente();
+  const lote = writeBatch(db);
+  lote.delete(docRef("vinculos", uid));
+  tokens.forEach(t => lote.delete(docRef("convites", t)));
+  await lote.commit();
+}
+
+// O jogador usa o link: cria o vínculo e marca o convite como usado (na mesma gravação).
+export async function vincularConvite(token, atletaId){
+  exigirPlanoVigente();
+  const u = auth.currentUser;
+  if (!u) throw new Error("Entre com sua conta Google primeiro.");
+  const lote = writeBatch(db);
+  lote.set(docRef("vinculos", u.uid), {
+    atletaId, token, email: (u.email || "").toLowerCase(), criadoEm: serverTimestamp(),
+  });
+  lote.update(docRef("convites", token), { usado: true, usadoEm: serverTimestamp(), usadoPor: u.uid });
+  await lote.commit();
+}
+
+// Respostas de presença de UM atleta (a tela do jogador só mostra as dele).
+export function listenPresencasDoAtleta(atletaId, cb){
+  const q = query(colRef("presencas"), where("atletaId", "==", atletaId));
+  return onSnapshot(q, (snap) => {
+    const items = [];
+    snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+    cb(items);
+  }, (err) => {
+    console.error("Erro ao ouvir presencas do atleta:", err);
+    cb([], err);
+  });
+}
+
+// Mensalidades/isenções de UM atleta (as regras só deixam o jogador ler as dele).
+export function listenFinanceiroDoAtleta(atletaId, cb){
+  const q = query(colRef("financeiro"), where("atletaId", "==", atletaId));
+  return onSnapshot(q, (snap) => {
+    const items = [];
+    snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+    cb(items);
+  }, (err) => {
+    console.error("Erro ao ouvir financeiro do atleta:", err);
+    cb([], err);
+  });
 }

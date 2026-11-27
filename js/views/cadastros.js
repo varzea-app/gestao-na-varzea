@@ -1,4 +1,5 @@
 import { $, $$, escapeHtml, openModal, closeModal, toast, confirmAction, fmt1, sortRows, sortableTh, wireSortableHeaders, reRenderKeepingFocus } from "../utils.js";
+import { acessoJogadorHtml, ligarAcessoJogador } from "./acesso-jogador.js";
 import { createDoc, saveDoc, removeDoc, setPrivateDoc, getPrivateDoc } from "../db.js";
 import { mediaNotaAtleta, mediaCampo, mediaAdversario, contagemJogosPorCampo, contagemJogosPorAdversario } from "../stats.js";
 import { posicoesDaModalidade, categoriasAtleta, pluralPosicao } from "../modalidade.js";
@@ -85,6 +86,7 @@ function openCrudForm(opts, item){
     <div class="modal-body">
       <form id="crud-form">
         <div class="form-grid">${fieldsHtml}</div>
+        ${isEdit && opts.secaoExtra ? opts.secaoExtra(item) : ""}
         <div class="form-actions" style="justify-content:space-between;">
           ${isEdit ? `<span style="display:flex; gap:8px; flex-wrap:wrap;"><button type="button" class="btn btn-danger" id="btn-delete-item">Excluir</button>${opts.anonimizar ? `<button type="button" class="btn btn-ghost" id="btn-anonimizar-item" title="Remove o nome e os dados pessoais, mas mantém as estatísticas">Anonimizar</button>` : ""}</span>` : `<span></span>`}
           <div style="display:flex; gap:8px;">
@@ -96,6 +98,7 @@ function openCrudForm(opts, item){
     </div>
   `);
   $$("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+  if (isEdit && opts.aoAbrirForm) opts.aoAbrirForm(item);
 
   $("#crud-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -419,6 +422,8 @@ export function renderAtletas(root, state){
     },
     singular: "Atleta",
     plural: "Atletas",
+    secaoExtra: (a) => acessoJogadorHtml(state, a),
+    aoAbrirForm: (a) => ligarAcessoJogador(state, a),
     columnToggle: true,
     filtros: () => [
       { key: "status", label: "Status",
@@ -467,6 +472,12 @@ export function renderAtletas(root, state){
       { key: "status", label: "Status", render: a => a.ativo === false
         ? `<span class="badge badge-off">Inativo</span>`
         : `<span class="badge badge-ok">Ativo</span>`, sort: a => a.ativo === false ? 0 : 1, default: true },
+      { key: "acesso", label: "Acesso ao app", render: a => {
+          if ((state.vinculos || []).some(v => v.atletaId === a.id)) return `<span class="badge badge-ok">Ativo</span>`;
+          const agora = Date.now();
+          const pend = (state.convites || []).some(c => c.atletaId === a.id && !c.usado && (c.expiraEm?.toMillis ? c.expiraEm.toMillis() : 0) > agora);
+          return pend ? `<span class="badge badge-off">Link enviado</span>` : `<span style="color:var(--ink-faint);">—</span>`;
+        }, sort: a => (state.vinculos || []).some(v => v.atletaId === a.id) ? 2 : (state.convites || []).some(c => c.atletaId === a.id && !c.usado) ? 1 : 0, default: true },
       { key: "votante", label: "Votante", render: a => a.podeVotar
         ? `<span class="badge badge-pending">Vota</span>`
         : `<span style="color:var(--ink-faint);">—</span>`, sort: a => a.podeVotar ? 1 : 0, default: true },

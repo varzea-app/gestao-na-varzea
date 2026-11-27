@@ -39,12 +39,12 @@ function mesesEntre(inicio, fim){
   return out;
 }
 
-function mesLabel(mesRef){
+export function mesLabel(mesRef){
   const [ano, mes] = mesRef.split("-").map(Number);
   return `${MESES_PT[mes - 1]}/${ano}`;
 }
 
-function fmtBRL(n){
+export function fmtBRL(n){
   return (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
@@ -475,7 +475,7 @@ function pendenciasPorMes(state){
 }
 
 // Linha do Pix (se configurado) pras mensagens de cobrança.
-function linhaPix(state){
+export function linhaPix(state){
   const c = state.configFinanceiro || {};
   if (!c.chavePix) return "";
   return `💳 Pix: ${c.chavePix}${c.pixNome ? ` (${c.pixNome})` : ""}`;
@@ -634,7 +634,7 @@ function openPendencias(state){
 // Extrato financeiro de um jogador ("check-up"): mês a mês, pago ou pendente,
 // com totais e mensagem pronta pra compartilhar.
 // ----------------------------------------------------------------------------
-function extratoJogadorDados(state, atleta){
+export function extratoJogadorDados(state, atleta){
   const valorAtual = state.configFinanceiro?.valorMensalidade ?? 0;
   const pagas = (state.financeiro || []).filter(t => t.tipo === "mensalidade" && t.atletaId === atleta.id);
   const porMes = Object.fromEntries(pagas.map(t => [t.mesRef, t]));

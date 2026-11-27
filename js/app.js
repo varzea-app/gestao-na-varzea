@@ -24,6 +24,8 @@ import { renderPremiacoes } from "./views/premiacoes.js";
 import { renderConfiguracoes } from "./views/configuracoes.js";
 import { renderAdmin } from "./views/admin.js";
 import { renderLanding } from "./views/landing.js";
+import { renderConvite } from "./views/convite.js";
+import { renderMeuEspaco } from "./views/meu-espaco.js";
 import { filtrarPorQuadro } from "./filters.js";
 import { renderPrivacidade, renderTermos, garantirAceite } from "./views/legal.js";
 
@@ -35,6 +37,9 @@ const state = {
   adversarios: [], campos: [], atletas: [], jogos: [], financeiro: [], configFinanceiro: null,
   loaded: { adversarios: false, campos: false, atletas: false, jogos: false, financeiro: false, configFinanceiro: false },
   isAuthorized: false,   // logado E da equipe do time aberto (ou dono da plataforma)
+  isJogador: false,      // logado com a conta ligada a um atleta (link individual)
+  vinculo: null,         // { id: uid, atletaId, email } do jogador logado
+  vinculos: [], convites: [], acessosIndisponivel: false, // só a equipe lê (acesso dos jogadores)
   usuario: null,
   ehSuper: false,
   falhaLeitura: false,   // alguma leitura do banco falhou (cota esgotada, sem internet...)
@@ -141,12 +146,25 @@ function pararFinanceiro(){
   paraEscutaFinanceiro.forEach(f => { try{ f(); }catch(err){ /* ok */ } });
   paraEscutaFinanceiro = [];
   falhasLeitura.delete("financeiro"); falhasLeitura.delete("configuracoes");
+  state.vinculos = []; state.convites = []; state.acessosIndisponivel = false;
 }
 function iniciarFinanceiro(){
   pararFinanceiro();
   paraEscutaFinanceiro.push(
     listenCollection("financeiro", "data", (items, err) => receber("financeiro", "financeiro", err, () => { state.financeiro = items; })),
     listenDoc("configuracoes", "geral", (item, err) => receber("configuracoes", "configFinanceiro", err, () => { state.configFinanceiro = item; })),
+  );
+  iniciarAcessos();
+}
+
+// Acesso dos jogadores (vínculos e convites): só a equipe lê. Se as regras novas
+// ainda não foram publicadas, não mostra o aviso vermelho de falha — só deixa a
+// seção "Acesso do jogador" indisponível.
+function iniciarAcessos(){
+  const falha = (err) => { state.acessosIndisponivel = !!err; };
+  paraEscutaFinanceiro.push(
+    listenCollection("vinculos", "email", (items, err) => { falha(err); if (!err) state.vinculos = items; }),
+    listenCollection("convites", "atletaId", (items, err) => { falha(err); if (!err) state.convites = items; }),
   );
 }
 
@@ -294,6 +312,7 @@ function atualizarMenu(route){
 
 function atualizarVisibilidadeMenu(){
   const autorizado = state.isAuthorized;
+  $$(".nav-jogador-only").forEach(el => { el.style.display = state.isJogador ? "" : "none"; });
   $$(".nav-protected-only").forEach(el => {
     const semPlano = el.dataset.semPlano === "1";
     el.style.display = autorizado && !semPlano ? "" : "none";
@@ -304,7 +323,7 @@ function atualizarVisibilidadeMenu(){
 // Barra de baixo do celular: no máximo 5 botões. Quando há mais itens visíveis,
 // os 4 mais usados ficam na barra e o resto vai para o botão "Mais". No
 // computador (menu lateral) isso não tem efeito.
-const PRIORIDADE_MOBILE = ["dashboard", "relatorios", "cadastros", "financeiro", "avaliacao", "configuracoes", "admin"];
+const PRIORIDADE_MOBILE = ["meu-espaco", "dashboard", "relatorios", "cadastros", "financeiro", "avaliacao", "configuracoes", "admin"];
 // "Modo jogo" fica sempre dentro do "Mais" no celular (não ocupa lugar na barra).
 const SEMPRE_NO_MAIS = "modojogo";
 const MAX_BARRA_MOBILE = 5;
@@ -374,6 +393,28 @@ function render(){
   if (route === "admin"){
     if (!authPronto) { root.innerHTML = `<div class="loader">Carregando…</div>`; return; }
     if (state.ehSuper) renderAdmin(root, state); else renderRestricted(root);
+    return;
+  }
+
+  // Link individual de convite e área do jogador: abertos a quem entra com Google
+  // (mesmo em time com telas restritas à equipe).
+  if (route === "convite"){
+    renderConvite(root, state, subId, { entrar: doLogin, aposVincular: carregarVinculo, authPronto });
+    return;
+  }
+  if (route === "meu-espaco"){
+    if (!authPronto){ root.innerHTML = `<div class="loader">Carregando…</div>`; return; }
+    if (!state.isJogador){
+      root.innerHTML = `<div class="card restricted-card">
+        <img src="${TEAM.escudo}" alt="${TEAM.nomeHtml}">
+        <h2>Meu espaço</h2>
+        <p>Esta área é de quem tem acesso de jogador. Peça ao administrador do time o seu link individual e abra-o para entrar.</p>
+        ${state.usuario ? "" : `<button id="btn-login-meu" class="btn-google">${GOOGLE_SVG} Entrar com Google</button>`}
+      </div>`;
+      $("#btn-login-meu", root)?.addEventListener("click", doLogin);
+      return;
+    }
+    renderMeuEspaco(root, state);
     return;
   }
 
@@ -483,17 +524,17 @@ $("#btn-signout")?.addEventListener("click", () => logout());
 $("#btn-signout-mobile")?.addEventListener("click", () => logout());
 
 function updateAuthUI(user){
-  const autorizado = state.isAuthorized;
+  const logado = !!user;
   atualizarVisibilidadeMenu();
 
   const mostrar = (sel, on, disp = "") => { const el = $(sel); if (el) el.style.display = on ? disp : "none"; };
-  mostrar("#btn-login-desktop", !autorizado);
-  mostrar("#user-chip-desktop", autorizado, "flex");
-  mostrar("#btn-signout", autorizado);
-  mostrar("#btn-login-mobile", !autorizado);
-  mostrar("#user-chip-mobile", autorizado, "flex");
+  mostrar("#btn-login-desktop", !logado);
+  mostrar("#user-chip-desktop", logado, "flex");
+  mostrar("#btn-signout", logado);
+  mostrar("#btn-login-mobile", !logado);
+  mostrar("#user-chip-mobile", logado, "flex");
 
-  if (autorizado && user){
+  if (logado){
     $("#user-name").textContent = user.displayName || "";
     $("#user-email").textContent = user.email || "";
     $("#user-avatar").src = user.photoURL || "";
@@ -539,9 +580,15 @@ async function iniciar(){
 
   watchAuth(async (user) => {
     let membro = false;
+    state.vinculo = null; state.isJogador = false;
     if (user && modo === "time"){
       membro = await usuarioEhDaEquipe(user);
-      if (!membro){
+      // Conta ligada a um atleta (link individual) também pode ficar logada.
+      state.vinculo = await lerVinculo(user);
+      state.isJogador = !!state.vinculo;
+      // Quem ainda vai usar um link de convite também fica logado.
+      const noConvite = parseHash().route === "convite";
+      if (!membro && !state.isJogador && !noConvite){
         toast(`A conta ${user.email} não faz parte da equipe deste time.`, "err");
         user = null;
         logout();
@@ -560,6 +607,23 @@ async function iniciar(){
     // Dirigente (não o dono da plataforma): pede o aceite da política e dos termos.
     if (state.isAuthorized && !state.ehSuper) garantirAceite(user);
   });
+}
+
+// Lê o vínculo da conta (jogador ligado a um atleta). Sem vínculo, devolve null.
+async function lerVinculo(user){
+  if (!user?.uid || modo !== "time") return null;
+  try{ return await lerDocumento("vinculos", user.uid); }
+  catch(err){ return null; }
+}
+
+// Depois de usar o link: relê o vínculo e abre o "Meu espaço".
+async function carregarVinculo(){
+  const u = state.usuario;
+  state.vinculo = await lerVinculo(u);
+  state.isJogador = !!state.vinculo;
+  updateAuthUI(u);
+  location.hash = state.isJogador ? "#meu-espaco" : "#dashboard";
+  render();
 }
 
 iniciar();
