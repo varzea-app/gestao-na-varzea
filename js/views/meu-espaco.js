@@ -96,7 +96,7 @@ function esqueleto(atleta){
 
     <section class="card card-pad" style="margin-bottom:16px;">
       <h2 class="card-title">Meu cadastro</h2>
-      <div class="card-sub">Seus dados. CPF e nascimento são opcionais e ficam visíveis só para você e para a equipe do time.</div>
+      <div class="card-sub">Seus dados. CPF e nascimento são opcionais e ficam visíveis só para você e para a diretoria do time.</div>
       <form id="me-form">
         <div class="form-grid">
           <div class="field span-2"><label>Nome *</label><input type="text" name="nome" required maxlength="40" value="${escapeHtml(atleta.nome || "")}"></div>
