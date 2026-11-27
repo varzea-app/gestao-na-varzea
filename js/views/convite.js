@@ -40,11 +40,6 @@ export function renderConvite(root, state, token, { entrar, aposVincular, authPr
     $("#cv-login", root)?.addEventListener("click", entrar);
     return;
   }
-  if (state.isAuthorized){
-    cartao(root, "Você já é da equipe", `<p>Esta conta já administra o time. O link de acesso é para os jogadores.</p>`,
-      `<div style="margin-top:12px;"><a class="btn btn-ghost btn-sm" href="#dashboard">Ir para o início</a></div>`);
-    return;
-  }
   if (state.isJogador){
     const a = state.atletas.find(x => x.id === state.vinculo?.atletaId);
     cartao(root, "Acesso já ativo", `<p>Esta conta já está ligada ${a ? `ao atleta <strong>${escapeHtml(a.nome)}</strong>` : "a um atleta"}.</p>`,
@@ -91,7 +86,7 @@ export function renderConvite(root, state, token, { entrar, aposVincular, authPr
   const exp = lido.convite.expiraEm?.toDate ? lido.convite.expiraEm.toDate() : new Date(lido.convite.expiraEm);
   cartao(root, `Olá, ${escapeHtml(atleta.nome)}!`,
     `<p>Este convite é para você acessar o <strong>${escapeHtml(TEAM.nome)}</strong> como <strong>${escapeHtml(atleta.nome)}</strong>.</p>
-     <p class="field-hint">Você entrou com <strong>${escapeHtml(user.email || "")}</strong>. Depois de confirmar, essa conta fica ligada ao seu cadastro, e você poderá editar seus dados, confirmar presença nos jogos e ver o seu extrato.</p>
+     <p class="field-hint">Você entrou com <strong>${escapeHtml(user.email || "")}</strong>. Depois de confirmar, essa conta fica ligada ao seu cadastro, e você poderá editar seus dados, confirmar presença nos jogos e ver o seu extrato.${state.isAuthorized ? " Como você também é da equipe, continua com o acesso de administrador e ganha o item “Meu espaço” no menu." : ""}</p>
      <button id="cv-confirmar" class="btn btn-primary">Sou eu, confirmar acesso</button>
      <p class="field-hint" style="margin-top:12px;">Não é você? Feche esta página e avise o administrador. O link vale uma vez e expira em ${escapeHtml(formatDate(dataISOLocal(exp)))}.</p>`);
   $("#cv-confirmar", root)?.addEventListener("click", async (e) => {
