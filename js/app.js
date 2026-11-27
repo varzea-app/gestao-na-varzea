@@ -24,7 +24,7 @@ import { renderPremiacoes } from "./views/premiacoes.js";
 import { renderConfiguracoes } from "./views/configuracoes.js";
 import { renderAdmin } from "./views/admin.js";
 import { renderLanding } from "./views/landing.js";
-import { renderConvite } from "./views/convite.js";
+import { renderConvite, lembrarConvite, conviteLembrado, esquecerConvite } from "./views/convite.js";
 import { renderMeuEspaco } from "./views/meu-espaco.js";
 import { filtrarPorQuadro } from "./filters.js";
 import { renderPrivacidade, renderTermos, garantirAceite } from "./views/legal.js";
@@ -546,7 +546,20 @@ function updateAuthUI(user){
 // Inicialização
 // ============================================================================
 
+// Link de convite: aceita ?convite=CÓDIGO (sobrevive a mais navegadores e apps) e
+// #convite/CÓDIGO. Em qualquer caso, guarda o código e deixa o endereço no formato #convite/.
+function lerConviteDoEndereco(){
+  try{
+    const m = location.hash.match(/^#convite\/([^/?]+)/);
+    const token = new URLSearchParams(location.search).get("convite") || (m ? m[1] : null);
+    if (!token) return;
+    lembrarConvite(token);
+    if (!m) history.replaceState(null, "", `${location.pathname}${location.search}#convite/${token}`);
+  }catch(err){ /* ok */ }
+}
+
 async function iniciar(){
+  lerConviteDoEndereco();
   document.body.classList.add("sem-time");
   render(); // "Carregando…"
 
@@ -586,10 +599,13 @@ async function iniciar(){
       // Conta ligada a um atleta (link individual) também pode ficar logada.
       state.vinculo = await lerVinculo(user);
       state.isJogador = !!state.vinculo;
-      // Quem ainda vai usar um link de convite também fica logado.
+      // Quem ainda vai usar um link de convite também fica logado. Se o navegador
+      // perdeu o final do link ao voltar do login, retoma o convite lembrado.
+      const pendente = conviteLembrado();
+      if (!membro && !state.isJogador && pendente && parseHash().route !== "convite") location.hash = `#convite/${pendente}`;
       const noConvite = parseHash().route === "convite";
       if (!membro && !state.isJogador && !noConvite){
-        toast(`A conta ${user.email} não faz parte da equipe deste time.`, "err");
+        toast(`A conta ${user.email} não tem acesso a este time. Se você é jogador, abra o link individual que o administrador te enviou.`, "err");
         user = null;
         logout();
       }

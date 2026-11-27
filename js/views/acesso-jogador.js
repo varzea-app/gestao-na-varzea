@@ -1,5 +1,5 @@
 import { $, escapeHtml, toast, formatDate, confirmAction, dataISOLocal } from "../utils.js";
-import { TEAM, linkDoTime } from "../tenant.js";
+import { TEAM } from "../tenant.js";
 import { criarConvite, cancelarConvites, desvincularJogador } from "../db.js";
 
 // ============================================================================
@@ -18,7 +18,9 @@ function paraData(v){
 const fmtData = (d) => d ? formatDate(dataISOLocal(d)) : "";
 
 export function linkDoConvite(token){
-  return linkDoTime(`#convite/${token}`);
+  // Código na parte "?" do endereço (não no "#"): alguns apps e navegadores do
+  // celular perdem o "#..." no meio do caminho.
+  return `${location.origin}${location.pathname}?time=${encodeURIComponent(TEAM.id)}&convite=${token}`;
 }
 
 function textoWhats(atleta, link){
