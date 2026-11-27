@@ -7,6 +7,7 @@ import {
 import { categoriasAtleta } from "../modalidade.js";
 import { temRecurso } from "../planos.js";
 import { extratoJogadorDados, mesLabel, fmtBRL, linhaPix } from "./financeiro.js";
+import { definirAnoExtrato } from "./extrato.js";
 import { jogosRealizados, idsDaPartida, golsEAssistenciasPorAtleta, resultadoJogo, desempateJogo } from "../stats.js";
 
 // ============================================================================
@@ -125,7 +126,7 @@ function esqueleto(atleta){
       <div id="me-financeiro"></div>
     </section>` : ""}
 
-    <p class="field-hint" style="text-align:center;">Para ver as estatísticas do time, use o menu: <a href="#ranking">Ranking</a> · <a href="#historico">Histórico</a> · <a href="#extrato/${atleta.id}">Meu extrato esportivo</a></p>
+    <p class="field-hint" style="text-align:center;">Para ver as estatísticas do time, use o menu: <a href="#ranking">Ranking</a> · <a href="#historico">Histórico</a></p>
   </div>`;
 }
 
@@ -294,5 +295,11 @@ function atualizarDesempenho(){
       <div class="kpi-tile"><div class="kpi-label" style="letter-spacing:.03em; font-size:10px;">Assistências</div><div class="kpi-value" style="font-size:24px;">${ga.assistencias}</div></div>
     </div>
     <div class="card-sub" style="margin-bottom:4px;">Últimas ${ultimas.length || 5} partidas em que você esteve</div>
-    ${linhas || `<p class="field-hint">Você ainda não tem partidas registradas.</p>`}`;
+    ${linhas || `<p class="field-hint">Você ainda não tem partidas registradas.</p>`}
+    ${temRecurso("extrato") ? `<div style="margin-top:12px;"><button type="button" class="btn btn-ghost btn-sm" id="me-ver-extrato">Ver meu extrato completo de ${new Date().getFullYear()}</button></div>` : ""}`;
+  // Abre o extrato do próprio jogador, já com o ano atual selecionado (se houver jogos nele).
+  $("#me-ver-extrato", box)?.addEventListener("click", () => {
+    definirAnoExtrato(String(new Date().getFullYear()));
+    location.hash = `#extrato/${atletaId}`;
+  });
 }

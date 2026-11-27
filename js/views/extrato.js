@@ -12,6 +12,9 @@ let filtroAno = "";
 // Extrato do jogador — tela pública (mesmo nível do Ranking). A nota média
 // de cada jogo é aberta a todos; o detalhe de "quem deu qual nota" só
 // aparece pra quem está logado com conta autorizada.
+// Permite abrir o extrato já filtrado em um ano (ex.: vindo do "Meu espaço").
+export function definirAnoExtrato(ano){ filtroAno = ano || ""; }
+
 export function renderExtrato(root, state, atletaId){
   wireQuadroChips(root, () => renderExtrato(root, state, atletaId));
   const jogadores = state.atletas.filter(ehJogador)
